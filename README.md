@@ -20,7 +20,7 @@ Next: talent (live tracking, hours, contracts, codes, outreach). Then the schedu
 ## Going live
 
 1. **Supabase.** Create a project. Open the SQL editor, paste all of `supabase/schema.sql` and run it. Then do the same with `supabase/002_calendar_requests_posts.sql`. Each later stage adds one more numbered file to run.
-2. **Vercel.** Import this repository. Under Environment Variables add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from Supabase (Project Settings, API). Deploy.
+2. **Vercel.** Import this repository. Under Environment Variables add `NEXT_PUBLIC_SUPABASE_URL` (the project address) and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (the Publishable key, from Project Settings, API Keys). Never use a Secret key here. Deploy.
 3. **Supabase again.** Under Authentication, URL Configuration, set the Site URL to the Vercel address.
 4. **First staff account.** Open the site, create an account, then run this in the Supabase SQL editor with your email:
 
