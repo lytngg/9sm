@@ -1,6 +1,5 @@
-import { notFound } from "next/navigation";
-import { requireProfile } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
+import { loadWorkspace } from "@/lib/workspace";
 import { inviteOperator, removeOperator } from "./actions";
 
 export default async function Workspace({
@@ -10,14 +9,13 @@ export default async function Workspace({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
-  const profile = await requireProfile();
   const { id } = await params;
   const { error } = await searchParams;
-  const supabase = await createClient();
-  // The database rules return nothing if this person may not see this client.
-  const { data: client } = await supabase.from("clients").select("id, name, type, smm").eq("id", id).maybeSingle();
-  if (!client) notFound();
-  const isStaff = profile.role === "staff";
+  const { supabase, client, isStaff } = await loadWorkspace(id);
+  const [{ count: waiting }, { count: newRequests }] = await Promise.all([
+    supabase.from("posts").select("id", { count: "exact", head: true }).eq("client_id", id).eq("status", "Client review"),
+    supabase.from("requests").select("id", { count: "exact", head: true }).eq("client_id", id).eq("status", "New"),
+  ]);
 
   let access: { email: string; joined: boolean }[] = [];
   if (isStaff) {
@@ -36,18 +34,15 @@ export default async function Workspace({
 
   return (
     <>
-      <h1>{client.name}</h1>
-      <p className="sub">
-        {client.type}
-        {client.smm ? ` · SMM: ${client.smm}` : ""}
-      </p>
       {error ? <div className="msg">{error}</div> : null}
       <div className="grid">
         <div className="card">
-          <h2>Workspace</h2>
-          <p className="mute">
-            The calendar, requests, approvals and talent for this client are the next stage of the build and will
-            appear here.
+          <h2>Right now</h2>
+          <p>
+            <Link href={`/c/${id}/posts`}>{waiting ?? 0} posts waiting on client approval</Link>
+          </p>
+          <p>
+            <Link href={`/c/${id}/requests`}>{newRequests ?? 0} new requests</Link>
           </p>
         </div>
         {isStaff ? (
