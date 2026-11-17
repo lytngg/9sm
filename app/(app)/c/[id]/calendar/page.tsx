@@ -40,28 +40,30 @@ export default async function Calendar({
   return (
     <>
       {error ? <div className="msg">{error}</div> : null}
-      <div className="row" style={{ marginBottom: 6 }}>
-        <Link className="btn ghost sm" href={`/c/${id}/calendar?m=${shift(-1)}`}>
-          Previous
-        </Link>
-        <b style={{ minWidth: 140, textAlign: "center" }}>{title}</b>
-        <Link className="btn ghost sm" href={`/c/${id}/calendar?m=${shift(1)}`}>
-          Next
-        </Link>
-      </div>
-      <div className="legend">
-        <span>
-          <i style={{ background: "var(--purple)" }} />
-          Post or note
-        </span>
-        <span>
-          <i style={{ background: "var(--pink)" }} />
-          Operator request
-        </span>
-        <span>
-          <i style={{ background: "var(--blue)" }} />
-          Event
-        </span>
+      <div className="calbar">
+        <div className="row">
+          <b>{title}</b>
+          <Link className="btn ghost sm" href={`/c/${id}/calendar?m=${shift(-1)}`}>
+            Previous
+          </Link>
+          <Link className="btn ghost sm" href={`/c/${id}/calendar?m=${shift(1)}`}>
+            Next
+          </Link>
+        </div>
+        <div className="legend">
+          <span>
+            <i style={{ background: "var(--purple)" }} />
+            Post or note
+          </span>
+          <span>
+            <i style={{ background: "var(--pink)" }} />
+            Client request
+          </span>
+          <span>
+            <i style={{ background: "var(--blue)" }} />
+            Event
+          </span>
+        </div>
       </div>
       <div className="tw">
         <div className="cal">

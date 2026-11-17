@@ -19,7 +19,7 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
   return (
     <>
       <h1>Clients</h1>
-      <p className="sub">Each client gets its own workspace. Operators only ever see their own.</p>
+      <p className="sub">Each client has its own workspace. Operators only ever see their own.</p>
       {error ? <div className="msg">{error}</div> : null}
       <div className="grid">
         <div className="card">

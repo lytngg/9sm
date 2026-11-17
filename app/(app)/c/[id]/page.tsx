@@ -35,16 +35,17 @@ export default async function Workspace({
   return (
     <>
       {error ? <div className="msg">{error}</div> : null}
+      <div className="stats">
+        <Link className="stat k" href={`/c/${id}/posts`}>
+          <b>{waiting ?? 0}</b>
+          <span>Posts waiting on the client</span>
+        </Link>
+        <Link className="stat p" href={`/c/${id}/requests`}>
+          <b>{newRequests ?? 0}</b>
+          <span>New requests for 9SM</span>
+        </Link>
+      </div>
       <div className="grid">
-        <div className="card">
-          <h2>Right now</h2>
-          <p>
-            <Link href={`/c/${id}/posts`}>{waiting ?? 0} posts waiting on client approval</Link>
-          </p>
-          <p>
-            <Link href={`/c/${id}/requests`}>{newRequests ?? 0} new requests</Link>
-          </p>
-        </div>
         {isStaff ? (
           <div className="card">
             <h2>Operator access</h2>

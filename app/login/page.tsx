@@ -8,10 +8,15 @@ export default async function Login({
   const { error, notice } = await searchParams;
   return (
     <main className="narrow">
-      <h1>
-        9SM <span style={{ color: "var(--purple)" }}>Platform</span>
-      </h1>
-      <p className="sub">Sign in with the email your account manager set up.</p>
+      <h1>9SM Platform</h1>
+      <div className="stripe" aria-hidden="true" style={{ margin: "14px 0 0", maxWidth: 120 }}>
+        <i />
+        <i />
+        <i />
+      </div>
+      <p className="sub" style={{ marginTop: 18 }}>
+        Sign in with the email your 9SM contact set up.
+      </p>
       {error ? <div className="msg">{error}</div> : null}
       {notice ? <div className="msg ok">{notice}</div> : null}
       <div className="card">

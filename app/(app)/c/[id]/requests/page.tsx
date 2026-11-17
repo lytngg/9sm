@@ -1,7 +1,7 @@
 import { loadWorkspace, REQUEST_KINDS, today } from "@/lib/workspace";
 import { addRequest, deleteRequest, setRequestStatus } from "../workspace-actions";
 
-const PILL: Record<string, string> = { New: "pill pink", Scheduled: "pill blue", Done: "pill good" };
+const PILL: Record<string, string> = { New: "pill purple", Scheduled: "pill blue", Done: "pill good" };
 
 export default async function Requests({
   params,

@@ -3,11 +3,13 @@ import { addPost, deletePost, reviewPost, setPostStage } from "../workspace-acti
 
 const PILL: Record<string, string> = {
   Draft: "pill",
-  "Team lead review": "pill warn",
-  "Client review": "pill purple",
+  "Team lead review": "pill purple",
+  "Client review": "pill pink",
   Approved: "pill good",
   Posted: "pill good",
 };
+// Rail colour says whose move it is: purple for 9SM, pink for the client, green once approved.
+const RAIL = ["rail", "rail purple", "rail pink", "rail good", "rail good"];
 const NEXT_LABEL = ["Send to team lead", "Send to client", "Mark approved", "Mark posted"];
 
 export default async function Posts({
@@ -31,18 +33,28 @@ export default async function Posts({
   const list = (
     <div className="card">
       <h2>{isStaff ? "Queue" : "Posts"}</h2>
+      <div className="key">
+        <span className="pill purple">With 9SM</span>
+        <span className="pill pink">With the client</span>
+        <span className="pill good">Approved</span>
+      </div>
       <div className="stack">
         {(posts ?? []).map((p) => {
           const stage = (STAGES as readonly string[]).indexOf(p.status);
           return (
-            <div key={p.id} style={{ borderBottom: "1px solid var(--line)", paddingBottom: 12 }}>
-              <div className="row" style={{ justifyContent: "space-between" }}>
-                <span className="mute">
-                  {p.publish_date} {String(p.publish_time).slice(0, 5)} · {p.channels.join(", ")}
+            <div key={p.id} className="post">
+              <div className="post-top">
+                <span>
+                  {p.publish_date} at {String(p.publish_time).slice(0, 5)}, {p.channels.join(", ")}
                 </span>
                 <span className={PILL[p.status] ?? "pill"}>{p.status}</span>
               </div>
-              <p style={{ whiteSpace: "pre-wrap", margin: "8px 0" }}>{p.body}</p>
+              <p className="post-body">{p.body}</p>
+              <div className={RAIL[stage] ?? "rail"} role="img" aria-label={`Stage ${stage + 1} of 5: ${p.status}`}>
+                {STAGES.map((s, i) => (
+                  <i key={s} className={i <= stage ? "on" : undefined} />
+                ))}
+              </div>
               {isStaff && p.feedback ? <p className="msg">Client asked for changes: {p.feedback}</p> : null}
               {isStaff ? (
                 <div className="row">
@@ -75,7 +87,7 @@ export default async function Posts({
           );
         })}
         {!posts || posts.length === 0 ? (
-          <p className="mute">{isStaff ? "No posts yet. Write the first one." : "Nothing waiting for you."}</p>
+          <p className="empty">{isStaff ? "No posts yet. Write the first one." : "Nothing waiting for you."}</p>
         ) : null}
       </div>
     </div>
