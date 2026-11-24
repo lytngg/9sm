@@ -24,3 +24,13 @@ export async function removeOperator(clientId: string, email: string) {
   revalidatePath(`/c/${clientId}`);
   redirect(`/c/${clientId}`);
 }
+
+export async function assignSmm(clientId: string, formData: FormData) {
+  await requireStaff();
+  const smm = String(formData.get("smm") ?? "");
+  const supabase = await createClient();
+  const { error } = await supabase.from("clients").update({ smm_id: smm || null }).eq("id", clientId);
+  if (error) redirect(`/c/${clientId}?error=` + encodeURIComponent("Could not save the social media manager."));
+  revalidatePath(`/c/${clientId}`, "layout");
+  redirect(`/c/${clientId}`);
+}

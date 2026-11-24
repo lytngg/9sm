@@ -8,6 +8,8 @@ Stage 1: logins, staff and operator roles, client workspaces, giving and removin
 
 Stage 2: a calendar per client, operator requests, and posts with team lead and client approval. Operators never see a post before it reaches client review. Publishing is still by hand.
 
+Stage 3: staff profiles with a name, title and photo, and a social media manager assigned to each client. Operators see that person at the top of their workspace, without the email address.
+
 Next: talent (live tracking, hours, contracts, codes, outreach). Then the scheduler, inbox and attribution.
 
 ## How it fits together
@@ -19,7 +21,7 @@ Next: talent (live tracking, hours, contracts, codes, outreach). Then the schedu
 
 ## Going live
 
-1. **Supabase.** Create a project. Open the SQL editor, paste all of `supabase/schema.sql` and run it. Then do the same with `supabase/002_calendar_requests_posts.sql`. Each later stage adds one more numbered file to run.
+1. **Supabase.** Create a project. Open the SQL editor, paste all of `supabase/schema.sql` and run it. Then do the same with `supabase/002_calendar_requests_posts.sql` and `supabase/003_staff_profiles_smm.sql`, in that order. Each later stage adds one more numbered file to run.
 2. **Vercel.** Import this repository. Under Environment Variables add `NEXT_PUBLIC_SUPABASE_URL` (the project address) and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (the Publishable key, from Project Settings, API Keys). Never use a Secret key here. Deploy.
 3. **Supabase again.** Under Authentication, URL Configuration, set the Site URL to the Vercel address.
 4. **First staff account.** Open the site, create an account, then run this in the Supabase SQL editor with your email:

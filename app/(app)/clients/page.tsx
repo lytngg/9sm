@@ -30,7 +30,6 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
                 <tr>
                   <th>Client</th>
                   <th>Type</th>
-                  <th>SMM</th>
                 </tr>
               </thead>
               <tbody>
@@ -40,12 +39,11 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
                       <Link href={`/c/${c.id}`}>{c.name}</Link>
                     </td>
                     <td>{c.type}</td>
-                    <td>{c.smm}</td>
                   </tr>
                 ))}
                 {!clients || clients.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="mute">
+                    <td colSpan={2} className="mute">
                       No clients yet. Add the first one.
                     </td>
                   </tr>
@@ -68,10 +66,6 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
                   <option key={t}>{t}</option>
                 ))}
               </select>
-            </label>
-            <label>
-              SMM
-              <input type="text" name="smm" />
             </label>
             <div>
               <button className="btn">Add client</button>

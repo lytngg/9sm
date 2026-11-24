@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { loadWorkspace } from "@/lib/workspace";
-import { inviteOperator, removeOperator } from "./actions";
+import { assignSmm, inviteOperator, removeOperator } from "./actions";
 
 export default async function Workspace({
   params,
@@ -18,7 +18,15 @@ export default async function Workspace({
   ]);
 
   let access: { email: string; joined: boolean }[] = [];
+  let staff: { id: string; email: string; full_name: string | null }[] = [];
+  let smmId = "";
   if (isStaff) {
+    const [{ data: staffRows }, { data: current }] = await Promise.all([
+      supabase.from("profiles").select("id, email, full_name").eq("role", "staff").order("email"),
+      supabase.from("clients").select("smm_id").eq("id", id).maybeSingle(),
+    ]);
+    staff = staffRows ?? [];
+    smmId = current?.smm_id ?? "";
     const [{ data: invites }, { data: members }] = await Promise.all([
       supabase.from("invites").select("email").eq("client_id", id).order("email"),
       supabase.from("client_members").select("profiles(email)").eq("client_id", id),
@@ -46,6 +54,31 @@ export default async function Workspace({
         </Link>
       </div>
       <div className="grid">
+        {isStaff ? (
+          <div className="card">
+            <h2>Social media manager</h2>
+            <form className="f" action={assignSmm.bind(null, client.id)}>
+              <label>
+                Who looks after this client
+                <select name="smm" defaultValue={smmId}>
+                  <option value="">Nobody yet</option>
+                  {staff.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.full_name ? `${s.full_name} (${s.email})` : s.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div>
+                <button className="btn">Save</button>
+              </div>
+            </form>
+            <p className="mute small">
+              The client sees this person&apos;s name, title and photo at the top of their workspace. Staff add those
+              under Your profile.
+            </p>
+          </div>
+        ) : null}
         {isStaff ? (
           <div className="card">
             <h2>Operator access</h2>

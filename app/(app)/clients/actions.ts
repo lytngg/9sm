@@ -13,7 +13,6 @@ export async function addClient(formData: FormData) {
   const { error } = await supabase.from("clients").insert({
     name,
     type: String(formData.get("type") ?? ""),
-    smm: String(formData.get("smm") ?? "").trim(),
   });
   if (error) {
     const message = error.code === "23505" ? "That client is already on the list." : "Could not add the client.";

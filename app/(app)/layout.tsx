@@ -40,9 +40,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <b>{profile.email}</b>
             {isStaff ? "9SM staff" : "Operator"}
           </div>
-          <form action={signOut}>
-            <button className="btn ghost sm">Sign out</button>
-          </form>
+          <div className="row">
+            {isStaff ? (
+              <Link className="btn ghost sm" href="/profile">
+                Your profile
+              </Link>
+            ) : null}
+            <form action={signOut}>
+              <button className="btn ghost sm">Sign out</button>
+            </form>
+          </div>
         </div>
       </aside>
       <div className="main">{children}</div>
