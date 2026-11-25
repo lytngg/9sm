@@ -54,7 +54,21 @@ begin
     (c, '{Instagram,TikTok}', date '2026-11-29', '11:00', 'Meet the people behind the Harbor. This week: the trader who sets your Saturday prices.', 'Approved', null, false, null, null, null),
     (c, '{X,Telegram}', date '2026-11-30', '15:00', 'Weekend recap. Biggest win, worst beat, best reply.', 'Team lead review', null, false, null, null, null),
     (c, '{X,Discord}', date '2026-12-02', '18:00', 'December giveaway. Ten winners, drawn live on stream. 18+. Terms apply.', 'Draft', 'Client asked for the prize list before this goes out.', true, 'Casino', 'Giveaway', null),
-    (c, '{YouTube}', date '2026-12-04', '16:00', 'New slot walkthrough with our host. Three minutes, no fluff.', 'Draft', null, false, null, null, null);
+    (c, '{YouTube}', date '2026-12-04', '16:00', 'New slot walkthrough with our host. Three minutes, no fluff.', 'Draft', null, false, null, null, null),
+    (c, '{X,Instagram}', date '2026-11-03', '18:00', 'Monday night football. Both teams to score, boosted. 18+. Play responsibly.', 'Posted', null, true, 'Sports', 'Odds boost', 'https://example.com/post/4'),
+    (c, '{TikTok}', date '2026-11-06', '19:00', 'We asked the trading desk for their worst ever call.', 'Posted', null, false, null, null, 'https://example.com/post/5'),
+    (c, '{X}', date '2026-11-08', '12:00', 'Saturday accumulator insurance. One leg lets you down, stake back as a free bet. 18+. Terms apply.', 'Posted', null, true, 'Sports', 'Free bet', 'https://example.com/post/6'),
+    (c, '{X,Telegram}', date '2026-11-11', '20:00', 'Champions League night at the Harbor. Live thread from kick-off.', 'Posted', null, false, null, null, 'https://example.com/post/7'),
+    (c, '{Instagram}', date '2026-11-14', '17:30', 'Weekend reload is back. 25 free spins when you top up. 18+. Terms apply. Play responsibly.', 'Posted', null, true, 'Casino', 'Reload', 'https://example.com/post/8'),
+    (c, '{X,YouTube}', date '2026-11-17', '16:00', 'How a price boost actually works, in ninety seconds.', 'Posted', null, false, null, null, 'https://example.com/post/9'),
+    (c, '{X}', date '2026-11-19', '13:00', 'Cashback Wednesday. 10% back on net losses in live casino. 18+. Terms apply. Play responsibly.', 'Posted', null, true, 'Casino', 'Cashback', 'https://example.com/post/10'),
+    (c, '{X,Instagram}', date '2026-11-26', '18:30', 'Midweek football. Three boosted prices go live at six. 18+. Play responsibly.', 'Approved', null, true, 'Sports', 'Odds boost', null),
+    (c, '{X,Instagram,TikTok}', date '2026-12-01', '12:00', 'Four new slots land today. Here is the one we cannot stop playing.', 'Client review', null, false, null, null, null),
+    (c, '{X,Discord}', date '2026-12-05', '20:00', 'Takeover night. Our streamer goes live at 8 with the new slots. 18+. Play responsibly.', 'Team lead review', null, false, null, null, null),
+    (c, '{X,Instagram}', date '2026-12-09', '10:00', 'The Harbor is two today. Birthday spins for everyone who has ever played with us. 18+. Terms apply.', 'Draft', null, true, 'Casino', 'Free spins', null),
+    (c, '{X}', date '2026-12-12', '11:30', 'Saturday lunchtime kick-off, boosted. 18+. Play responsibly.', 'Draft', null, true, 'Sports', 'Odds boost', null),
+    (c, '{Instagram,Facebook}', date '2026-12-20', '18:00', 'Christmas giveaway draw, live at six.', 'Draft', null, true, 'Casino', 'Giveaway', null),
+    (c, '{X,Instagram}', date '2026-12-26', '09:00', 'Boxing Day football. A full card and a boost on every match. 18+. Play responsibly.', 'Draft', null, true, 'Sports', 'Odds boost', null);
 
   insert into public.calendar_entries (client_id, date, kind, text) values
     (c, date '2026-11-27', 'event', 'Black Friday campaign day'),
@@ -64,24 +78,38 @@ begin
     (c, date '2026-12-20', 'event', 'Christmas giveaway draw');
 
   insert into public.requests (client_id, for_date, kind, details, status) values
-    (c, date '2026-11-27', 'Offer', 'Black Friday deposit match. Needs a hero creative and three follow-ups.', 'Scheduled'),
+    (c, date '2026-11-27', 'Casino offer', 'Black Friday deposit match up to 100. One day only. Terms in the brand folder.', 'Scheduled'),
     (c, date '2026-12-01', 'Product news', 'Four new slots land Monday. Assets in the brand folder.', 'New'),
-    (c, date '2026-12-05', 'Event', 'Streamer takeover on Friday. Please cover it live.', 'New'),
+    (c, date '2026-12-05', 'Event', 'Streamer takeover on Friday at 8pm UK. Please cover it live.', 'New'),
+    (c, date '2026-12-09', 'Birthday or anniversary', 'The Harbor turns two. We want to make a fuss of it.', 'New'),
+    (c, date '2026-12-12', 'Sports offer', 'Price boost on the Saturday lunchtime kick-off. Odds to follow Thursday.', 'New'),
     (c, date '2026-11-20', 'Other', 'Refresh the pinned post.', 'Done');
 
   -- talent roster (all invented)
   insert into public.talent (name, platform, channel_url, audience, bio, tags, markets, guide_price) values
-    ('NorthSideSpins', 'Kick', 'https://example.com/northsidespins', '2,400 average viewers, mostly UK and Nordics', 'Demo profile. Slots and live casino, five nights a week.', '{"Crypto casino","Hybrid casino"}', '{UK,Europe}', 'From €9,000 a month') returning id into t1;
+    ('NorthSideSpins', 'Kick', 'https://example.com/northsidespins', '2,400 average viewers, mostly UK and Nordics', 'Demo profile. Slots and live casino, five nights a week.', '{"Crypto casino"}', '{UK,Europe}', 'From €9,000 a month') returning id into t1;
   insert into public.talent (name, platform, channel_url, audience, bio, tags, markets, guide_price) values
-    ('AccaAndy', 'YouTube', 'https://example.com/accaandy', '310k subscribers, football betting', 'Demo profile. Weekend football previews and bet builders.', '{Sportsbook,Predictions}', '{UK}', 'From €3,500 a video') returning id into t2;
+    ('AccaAndy', 'YouTube', 'https://example.com/accaandy', '310k subscribers, football betting', 'Demo profile. Weekend football previews and bet builders.', '{Sportsbook}', '{UK}', 'From €3,500 a video') returning id into t2;
   insert into public.talent (name, platform, channel_url, audience, bio, tags, markets, guide_price) values
-    ('MiraPlays', 'Twitch', 'https://example.com/miraplays', '1,100 average viewers, variety and casino', 'Demo profile. Calm, funny, strong chat.', '{"Crypto casino","Sweepstakes casino"}', '{Europe,US}', 'From €5,000 a month') returning id into t3;
+    ('MiraPlays', 'Twitch', 'https://example.com/miraplays', '1,100 average viewers, variety and casino', 'Demo profile. Calm, funny, strong chat.', '{"Crypto casino"}', '{Europe,US}', 'From €5,000 a month') returning id into t3;
   insert into public.talent (name, platform, channel_url, audience, bio, tags, markets, guide_price) values
-    ('PackRipTom', 'TikTok', 'https://example.com/packriptom', '540k followers, card rips', 'Demo profile. Daily rips, big reactions.', '{"Card rips","Loot boxes"}', '{US}', 'From €2,000 a post') returning id into t4;
+    ('LineMoveLuca', 'X', 'https://example.com/linemoveluca', '120k followers, sharp sports takes', 'Demo profile. Daily picks thread, high reply rate.', '{Sportsbook}', '{UK,Europe,US}', 'From €1,500 a week') returning id into t4;
   insert into public.talent (name, platform, channel_url, audience, bio, tags, markets, guide_price) values
-    ('LineMoveLuca', 'X', 'https://example.com/linemoveluca', '120k followers, sharp sports takes', 'Demo profile. Daily picks thread, high reply rate.', '{Sportsbook}', '{UK,Europe,US}', 'From €1,500 a week') returning id into t5;
+    ('JadeOnTheReels', 'Instagram', 'https://example.com/jadeonthereels', '210k followers, lifestyle and casino nights', 'Demo profile. Polished reels, strong with women 25 to 40.', '{"Crypto casino","Hybrid casino"}', '{UK,Europe}', 'From €2,800 a reel') returning id into t5;
+  insert into public.talent (name, platform, channel_url, audience, bio, tags, markets, guide_price) values
+    ('BigStackBenji', 'Kick', 'https://example.com/bigstackbenji', '6,800 average viewers, high stakes slots', 'Demo profile. Loud, long sessions, big clip output.', '{"Crypto casino"}', '{Europe,US}', 'From €22,000 a month'),
+    ('TerraceTalk', 'X', 'https://example.com/terracetalk', '380k followers, football culture', 'Demo profile. Match-day threads that get quoted everywhere.', '{Sportsbook}', '{UK}', 'From €2,500 a week'),
+    ('CryptoCassie', 'X', 'https://example.com/cryptocassie', '95k followers, crypto and casino', 'Demo profile. Crypto native audience, good on launches.', '{"Crypto casino",Predictions}', '{Europe,US}', 'From €1,200 a post'),
+    ('SundayLeagueSam', 'TikTok', 'https://example.com/sundayleaguesam', '720k followers, football comedy', 'Demo profile. Sketches that travel well beyond betting.', '{Sportsbook}', '{UK,Europe}', 'From €3,000 a video'),
+    ('SpinDoctorDee', 'TikTok', 'https://example.com/spindoctordee', '260k followers, slot reactions', 'Demo profile. Short reaction clips, posts daily.', '{"Crypto casino","Sweepstakes casino"}', '{US}', 'From €1,800 a video'),
+    ('OddsOnOlly', 'Instagram', 'https://example.com/oddsonolly', '140k followers, betting tips and banter', 'Demo profile. Stories every match day, loyal following.', '{Sportsbook}', '{UK}', 'From €1,400 a story set'),
+    ('TheBetLab', 'YouTube', 'https://example.com/thebetlab', '180k subscribers, betting explained', 'Demo profile. Long, careful videos. Good for trust.', '{Sportsbook,Predictions}', '{UK,US}', 'From €4,200 a video'),
+    ('LateNightLena', 'Twitch', 'https://example.com/latenightlena', '900 average viewers, live casino', 'Demo profile. Small but spends a lot of time with chat.', '{"Crypto casino","Hybrid casino"}', '{Europe}', 'From €3,000 a month'),
+    ('PackRipTom', 'TikTok', 'https://example.com/packriptom', '540k followers, card rips', 'Demo profile. Daily rips, big reactions.', '{"Card rips","Loot boxes"}', '{US}', 'From €2,000 a post');
   insert into public.talent_pitch (client_id, talent_id, headline, available_until) values
-    (c, t1, 'Free in December after a contract ended. First refusal is yours.', date '2026-12-05')
+    (c, t1, 'Free in December after a contract ended. First refusal is yours.', date '2026-12-05'),
+    (c, t4, 'Wants a sportsbook partner before the Christmas fixtures.', date '2026-12-12'),
+    (c, t5, 'Just went independent. Not working with another casino yet.', null)
     on conflict (client_id, talent_id) do update set headline = excluded.headline, available_until = excluded.available_until;
   insert into public.talent_interest (client_id, talent_id, note, status) values (c, t2, 'Keen for the Christmas fixtures.', 'In talks')
     on conflict (client_id, talent_id) do update set status = excluded.status;
@@ -104,15 +132,18 @@ begin
     (c, 'community', 'Please add the giveaway rules to the Discord FAQ.', 'Done', now() - interval '4 days'),
     (c, 'clipping', 'Can we get clips from the Friday takeover stream?', 'New', now() - interval '2 hours');
 
-  -- channel numbers, eight weeks
-  foreach ch in array array['X','Instagram','TikTok','YouTube','Discord','Telegram'] loop
-    base := case ch when 'X' then 18200 when 'Instagram' then 9400 when 'TikTok' then 12100 when 'YouTube' then 3100 when 'Discord' then 4200 else 2600 end;
-    for i in 0..7 loop
-      w := (date_trunc('week', date '2026-11-23') - (7 - i) * interval '7 days')::date;
-      insert into public.channel_stats (client_id, channel, week, followers)
-        values (c, ch, w, (base * (1 + i * (case ch when 'TikTok' then 0.031 when 'X' then 0.018 when 'Discord' then 0.012 else 0.009 end)))::int);
-    end loop;
-  end loop;
+  -- channel numbers, ten weeks, some up and some down
+  insert into public.channel_stats (client_id, channel, week, followers)
+  select c, v.ch, (date '2026-11-23' - (9 - g.i) * 7), v.vals[g.i + 1]
+  from (values
+    ('X',         array[17100,17420,17380,17900,18350,18300,18920,19480,20150,20900]),
+    ('Instagram', array[9400,9460,9430,9510,9480,9550,9530,9600,9580,9640]),
+    ('TikTok',    array[9800,10400,10250,11300,12100,11900,13200,14100,15300,16800]),
+    ('YouTube',   array[3400,3380,3390,3350,3320,3330,3280,3240,3190,3150]),
+    ('Facebook',  array[6200,6180,6150,6160,6100,6050,6060,5990,5930,5880]),
+    ('Discord',   array[3900,3980,4120,4090,4200,4310,4290,4380,4460,4550]),
+    ('Telegram',  array[2500,2540,2610,2590,2680,2740,2720,2700,2690,2710])
+  ) v(ch, vals) cross join generate_series(0, 9) g(i);
 
   -- four lighter demo clients so lists, the onboarding board and the benchmark have company
   for other in select * from (values

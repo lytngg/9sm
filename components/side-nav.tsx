@@ -20,8 +20,7 @@ export function SideNav({ isStaff, clients, depts }: { isStaff: boolean; clients
       </NavLink>
       <NavLink href={`/c/${id}/health`}>Channel health</NavLink>
       <NavLink href={`/c/${id}/calendar`}>Calendar</NavLink>
-      <NavLink href={`/c/${id}/posts`}>{isStaff ? "Posts and approvals" : "Approvals"}</NavLink>
-      <NavLink href={`/c/${id}/requests`}>Requests</NavLink>
+      {isStaff ? <NavLink href={`/c/${id}/posts`}>Write posts</NavLink> : null}
       <NavLink href={`/c/${id}/hub`}>{isStaff ? "Onboarding and hub" : "Your brand"}</NavLink>
       <div className="side-label">Plugins</div>
       {depts.map((d) => (

@@ -9,7 +9,7 @@ const DOC_TYPES: Record<string, string> = { ...IMAGE_TYPES, "application/pdf": "
 export async function uploadClientFile(
   supabase: SupabaseClient,
   clientId: string,
-  folder: "posts" | "brand",
+  folder: "posts" | "brand" | "requests",
   file: FormDataEntryValue | null,
   allowPdf = false,
 ): Promise<{ path: string | null; error?: string }> {

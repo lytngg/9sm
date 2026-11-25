@@ -64,11 +64,11 @@ export default async function Workspace({
     <>
       {error ? <div className="msg">{error}</div> : null}
       <div className="stats">
-        <Link className="stat k" href={`/c/${id}/posts`}>
+        <Link className="stat k" href={isStaff ? `/c/${id}/posts` : `/c/${id}/calendar`}>
           <b>{waiting ?? 0}</b>
           <span>Posts waiting on the client</span>
         </Link>
-        <Link className="stat p" href={`/c/${id}/requests`}>
+        <Link className="stat p" href={`/c/${id}/calendar`}>
           <b>{newRequests ?? 0}</b>
           <span>New requests for 9SM</span>
         </Link>

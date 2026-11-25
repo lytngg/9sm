@@ -1,8 +1,16 @@
 import Link from "next/link";
-import { loadWorkspace, today } from "@/lib/workspace";
-import { addCalendarEntry, deleteCalendarEntry } from "../workspace-actions";
+import { loadWorkspace, REQUEST_KINDS, today } from "@/lib/workspace";
+import { signedUrls } from "@/lib/files";
+import { Tags } from "@/components/tags";
+import { addCalendarEntry, addRequest, deleteCalendarEntry, deleteRequest, reviewPost, setRequestStatus } from "../workspace-actions";
 
-type Item = { date: string; cls: string; text: string; entryId?: string; approve?: boolean };
+type Item = { date: string; cls: string; text: string; tag?: string; entryId?: string; approve?: boolean };
+const SHORT: Record<string, string> = { X: "X", Instagram: "IG", Facebook: "FB", TikTok: "TT", YouTube: "YT", Discord: "DC", Telegram: "TG" };
+const REQ_PILL: Record<string, [string, string]> = {
+  New: ["pill pink", "Sent to 9SM"],
+  Scheduled: ["pill purple", "Being made"],
+  Done: ["pill good", "Posted"],
+};
 
 export default async function Calendar({
   params,
@@ -26,14 +34,17 @@ export default async function Calendar({
   const title = new Date(Date.UTC(y, mo - 1, 1)).toLocaleString("en", { month: "long", year: "numeric", timeZone: "UTC" });
 
   const level: number = client.event_level ?? 1;
-  const [{ data: entries }, { data: posts }, { data: requests }, { data: shared }] = await Promise.all([
+  const [{ data: entries }, { data: posts }, { data: requests }, { data: shared }, { data: waiting }, { data: sent }] = await Promise.all([
     supabase.from("calendar_entries").select("id, date, kind, text").eq("client_id", id).gte("date", from).lte("date", to),
-    supabase.from("posts").select("publish_date, channels, body, status").eq("client_id", id).gte("publish_date", from).lte("publish_date", to),
+    supabase.from("posts").select("publish_date, publish_time, channels, body, status").eq("client_id", id).gte("publish_date", from).lte("publish_date", to).order("publish_time"),
     supabase.from("requests").select("for_date, kind, details").eq("client_id", id).gte("for_date", from).lte("for_date", to),
     level > 0
       ? supabase.from("global_events").select("starts, ends, title, category, regions, tier").lte("tier", level).lte("starts", to).order("tier")
       : Promise.resolve({ data: [] as never[] }),
+    supabase.from("posts").select("*").eq("client_id", id).eq("status", "Client review").order("publish_date").order("publish_time"),
+    supabase.from("requests").select("*").eq("client_id", id).order("for_date", { ascending: false }).limit(30),
   ]);
+  const files = await signedUrls(supabase, [...(waiting ?? []).map((p) => p.image_path), ...(sent ?? []).map((r) => r.attachment_path)]);
   // Shared sports and esports dates: only ones for this client's markets and chosen
   // categories. They sit as one quiet line per day, never more than two.
   const markets: string[] = client.markets ?? [];
@@ -49,11 +60,12 @@ export default async function Calendar({
     ...(entries ?? []).map((e) => ({ date: e.date, cls: e.kind === "event" ? "ev event" : "ev", text: e.text, entryId: e.id })),
     ...(posts ?? []).map((p) => ({
       date: p.publish_date,
-      cls: p.status === "Client review" ? "ev req" : "ev",
-      text: `${p.channels.join(", ")}: ${p.body} (${p.status})`,
+      cls: p.status === "Client review" ? "ev wait" : p.status === "Posted" || p.status === "Approved" ? "ev good" : "ev",
+      tag: `${String(p.publish_time).slice(0, 5)} ${(p.channels as string[]).map((c) => SHORT[c] ?? c).join(" ")}`,
+      text: p.body,
       approve: p.status === "Client review",
     })),
-    ...(requests ?? []).map((r) => ({ date: r.for_date, cls: "ev req", text: `${r.kind}: ${r.details}` })),
+    ...(requests ?? []).map((r) => ({ date: r.for_date, cls: "ev req", tag: r.kind, text: r.details })),
   ];
 
   const cells = Math.ceil((startDay + days) / 7) * 7;
@@ -72,12 +84,20 @@ export default async function Calendar({
         </div>
         <div className="legend">
           <span>
-            <i style={{ background: "var(--purple)" }} />
-            Post or note
+            <i style={{ background: "var(--good)" }} />
+            Approved or posted
           </span>
           <span>
             <i style={{ background: "var(--pink)" }} />
-            Client request
+            {isStaff ? "Waiting on the client" : "Needs your approval"}
+          </span>
+          <span>
+            <i style={{ background: "var(--purple)" }} />
+            Being written
+          </span>
+          <span>
+            <i style={{ background: "var(--warn)" }} />
+            {isStaff ? "Added by the client" : "Added by you"}
           </span>
           <span>
             <i style={{ background: "var(--blue)" }} />
@@ -116,15 +136,13 @@ export default async function Calendar({
                 {items
                   .filter((it) => inMonth && it.date === date)
                   .map((it, k) => (
-                    <div className={it.cls} key={k}>
-                      {it.text}
+                    <div className={it.cls} key={k} title={it.text}>
+                      {it.tag ? <span className="ev-tag">{it.tag}</span> : null}
+                      <span className="ev-text">{it.text}</span>
                       {it.approve ? (
-                        <>
-                          {" "}
-                          <Link className="btn sm" href={`/c/${id}/posts`}>
-                            {isStaff ? "Open" : "Review"}
-                          </Link>
-                        </>
+                        <a className="ev-go" href="#approvals">
+                          {isStaff ? "With the client" : "Review"}
+                        </a>
                       ) : null}
                       {isStaff && it.entryId ? (
                         <form className="inline" action={deleteCalendarEntry.bind(null, id, it.entryId)}>
@@ -141,10 +159,128 @@ export default async function Calendar({
           })}
         </div>
       </div>
-      <br />
+
+      <section className="plug-sec" id="approvals">
+        <h3>
+          {isStaff ? "Waiting on the client" : "Waiting for your approval"}
+          {waiting && waiting.length ? <span className="count">{waiting.length}</span> : null}
+        </h3>
+        {waiting && waiting.length ? (
+          <div className="approve-grid">
+            {waiting.map((p) => (
+              <div key={p.id} className="approve">
+                <div className="mute small">
+                  {p.publish_date} at {String(p.publish_time).slice(0, 5)} on {(p.channels as string[]).join(", ")}
+                </div>
+                {p.image_path && files[p.image_path] ? (
+                  // A short-lived link to a private file, so the image optimiser is not used.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="creative" src={files[p.image_path]} alt="Creative for this post" />
+                ) : null}
+                <p className="post-body">{p.body}</p>
+                {p.is_offer ? <Tags items={["Offer", p.offer_product, p.offer_kind].filter(Boolean)} /> : null}
+                {isStaff ? (
+                  <Link className="btn ghost sm" href={`/c/${id}/posts`} style={{ justifySelf: "start" }}>
+                    Open in posts
+                  </Link>
+                ) : (
+                  <>
+                    <form action={reviewPost.bind(null, id, p.id, true)}>
+                      <input type="hidden" name="from" value="calendar" />
+                      <button className="btn" style={{ width: "100%" }}>
+                        Approve
+                      </button>
+                    </form>
+                    <form className="row" action={reviewPost.bind(null, id, p.id, false)}>
+                      <input type="hidden" name="from" value="calendar" />
+                      <input type="text" name="feedback" placeholder="What should change?" required style={{ flex: 1, minWidth: 140 }} />
+                      <button className="btn ghost sm">Ask for changes</button>
+                    </form>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="empty">{isStaff ? "Nothing is with the client right now." : "Nothing needs you right now."}</p>
+        )}
+      </section>
+
+      <section className="plug-sec">
+        <div className="grid">
+          <div className="card">
+            <form className="f" action={addRequest.bind(null, id)}>
+              <h2>{isStaff ? "Add something for the client" : "Add something for us to post about"}</h2>
+              <div className="row">
+                <label>
+                  What is it
+                  <select name="kind">
+                    {REQUEST_KINDS.map((k) => (
+                      <option key={k}>{k}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Date
+                  <input type="date" name="date" defaultValue={now} required />
+                </label>
+              </div>
+              <label>
+                Tell us about it
+                <textarea name="details" rows={3} placeholder="The offer and its terms, the fixture, whose birthday, what is launching" required />
+              </label>
+              <label>
+                Image or PDF, if you have one
+                <input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" />
+              </label>
+              <div>
+                <button className="btn">Add to the calendar</button>
+              </div>
+            </form>
+          </div>
+          <div className="card">
+            <h2>{isStaff ? "What the client has added" : "What you have added"}</h2>
+            {(sent ?? []).map((r) => (
+              <div key={r.id} className="post">
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                  <b>
+                    {r.kind} <span className="mute small">for {r.for_date}</span>
+                  </b>
+                  <span className={(REQ_PILL[r.status] ?? REQ_PILL.New)[0]}>{(REQ_PILL[r.status] ?? REQ_PILL.New)[1]}</span>
+                </div>
+                <p className="post-body">{r.details}</p>
+                {r.attachment_path && files[r.attachment_path] ? (
+                  <a className="small" href={files[r.attachment_path]} target="_blank" rel="noreferrer">
+                    Open the file
+                  </a>
+                ) : null}
+                {isStaff ? (
+                  <div className="row" style={{ marginTop: 8 }}>
+                    {r.status === "New" ? (
+                      <form action={setRequestStatus.bind(null, id, r.id, "Scheduled")}>
+                        <button className="btn sm">Start on it</button>
+                      </form>
+                    ) : null}
+                    {r.status === "Scheduled" ? (
+                      <form action={setRequestStatus.bind(null, id, r.id, "Done")}>
+                        <button className="btn sm">Mark posted</button>
+                      </form>
+                    ) : null}
+                    <form action={deleteRequest.bind(null, id, r.id)}>
+                      <button className="btn ghost sm">Delete</button>
+                    </form>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            {!sent || sent.length === 0 ? <p className="empty">Nothing added yet.</p> : null}
+          </div>
+        </div>
+      </section>
+
       {isStaff ? (
-        <div className="card">
-          <h2>Add to the calendar</h2>
+        <div className="card" style={{ marginTop: 36, maxWidth: 560 }}>
+          <h2>Add a 9SM note or event</h2>
           <form className="f" action={addCalendarEntry.bind(null, id)}>
             <div className="row">
               <label>
@@ -167,15 +303,8 @@ export default async function Calendar({
               <button className="btn">Add</button>
             </div>
           </form>
-          <p className="mute" style={{ fontSize: 12 }}>
-            Posts and operator requests appear on the calendar on their own.
-          </p>
         </div>
-      ) : (
-        <p className="mute">
-          Have an offer or launch coming up? <Link href={`/c/${id}/requests`}>Send it to the team.</Link>
-        </p>
-      )}
+      ) : null}
     </>
   );
 }

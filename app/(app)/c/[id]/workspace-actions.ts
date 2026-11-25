@@ -9,8 +9,8 @@ import { uploadClientFile } from "@/lib/files";
 
 // Every action re-checks the role here, and the database rules check again.
 function back(path: string, error?: string): never {
-  revalidatePath(path);
-  redirect(error ? `${path}?error=${encodeURIComponent(error)}` : path);
+  revalidatePath(path.split("?")[0]);
+  redirect(error ? `${path}${path.includes("?") ? "&" : "?"}error=${encodeURIComponent(error)}` : path);
 }
 
 export async function addCalendarEntry(clientId: string, formData: FormData) {
@@ -38,19 +38,23 @@ export async function deleteCalendarEntry(clientId: string, entryId: string) {
 
 export async function addRequest(clientId: string, formData: FormData) {
   await requireProfile();
-  const path = `/c/${clientId}/requests`;
+  const path = `/c/${clientId}/calendar`;
   const kind = str(formData, "kind");
   const date = str(formData, "date");
   const details = str(formData, "details");
-  if (!REQUEST_KINDS.includes(kind) || !date || !details) back(path, "Fill in the type, date and details.");
+  if (!REQUEST_KINDS.includes(kind) || !date || !details) back(path, "Pick what it is, the date, and tell us about it.");
   const supabase = await createClient();
-  const { error } = await supabase.from("requests").insert({ client_id: clientId, for_date: date, kind, details });
-  back(path, error ? "Could not send that request." : undefined);
+  const upload = await uploadClientFile(supabase, clientId, "requests", formData.get("file"), true);
+  if (upload.error) back(path, upload.error);
+  const { error } = await supabase
+    .from("requests")
+    .insert({ client_id: clientId, for_date: date, kind, details, attachment_path: upload.path });
+  back(`${path}?m=${date.slice(0, 7)}`, error ? "That did not save. Try again." : undefined);
 }
 
 export async function setRequestStatus(clientId: string, requestId: string, status: string) {
   await requireStaff();
-  const path = `/c/${clientId}/requests`;
+  const path = `/c/${clientId}/calendar`;
   if (!["New", "Scheduled", "Done"].includes(status)) back(path);
   const supabase = await createClient();
   const { error } = await supabase.from("requests").update({ status }).eq("id", requestId).eq("client_id", clientId);
@@ -61,7 +65,7 @@ export async function deleteRequest(clientId: string, requestId: string) {
   await requireStaff();
   const supabase = await createClient();
   const { error } = await supabase.from("requests").delete().eq("id", requestId).eq("client_id", clientId);
-  back(`/c/${clientId}/requests`, error ? "Could not delete that request." : undefined);
+  back(`/c/${clientId}/calendar`, error ? "Could not delete that request." : undefined);
 }
 
 export async function addPost(clientId: string, formData: FormData) {
@@ -122,7 +126,8 @@ export async function reviewPost(clientId: string, postId: string, approve: bool
     p_approve: approve,
     p_feedback: approve ? null : str(formData, "feedback"),
   });
-  back(`/c/${clientId}/posts`, error ? "That post is no longer waiting for your review." : undefined);
+  const from = formData.get("from") === "calendar" ? "calendar" : "posts";
+  back(`/c/${clientId}/${from}`, error ? "That post is no longer waiting for your review." : undefined);
 }
 
 export async function setLiveUrl(clientId: string, postId: string, formData: FormData) {

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { CHANNELS, loadWorkspace, OFFER_KINDS, OFFER_PRODUCTS, STAGES, today } from "@/lib/workspace";
 import { addPost, deletePost, reviewPost, setLiveUrl, setPostStage } from "../workspace-actions";
 import { signedUrls } from "@/lib/files";
@@ -24,6 +25,8 @@ export default async function Posts({
   const { id } = await params;
   const { error } = await searchParams;
   const { supabase, isStaff } = await loadWorkspace(id);
+  // Clients approve on the calendar. This page is where staff write.
+  if (!isStaff) redirect(`/c/${id}/calendar`);
   // Operators only get rows the database lets them see: client review and later.
   const { data: posts } = await supabase
     .from("posts")

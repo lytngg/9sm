@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CHANNELS, loadWorkspace, today } from "@/lib/workspace";
 import { logNumbers } from "./actions";
 
@@ -61,8 +62,8 @@ export default async function Health({
     const state: "new" | "attention" | "strong" | "steady" = g === null ? "new" : g < -0.5 ? "attention" : g >= (median ?? 2) && g > 0.5 ? "strong" : "steady";
     return { channel, series, g, median, state };
   }).filter((r) => r.series.length > 0);
-  const TONE = { strong: "var(--good)", steady: "var(--mute)", attention: "var(--warn)", new: "var(--mute)" } as const;
-  const WORD = { strong: "Strong", steady: "Steady", attention: "Needs attention", new: "Just started" } as const;
+  const TONE = { strong: "var(--good)", steady: "var(--mute)", attention: "var(--bad)", new: "var(--mute)" } as const;
+  const WORD = { strong: "Growing", steady: "Steady", attention: "Dropping", new: "Just started" } as const;
 
   return (
     <>
@@ -84,11 +85,17 @@ export default async function Health({
                 {r.series[r.series.length - 1].followers.toLocaleString("en")}
                 <span className="mute small"> followers</span>
               </span>
-              <span>
+              <span style={{ color: r.state === "steady" || r.state === "new" ? undefined : TONE[r.state] }}>
                 {r.g === null ? <span className="mute small">Trend after two weeks</span> : `${r.g >= 0 ? "+" : ""}${r.g.toFixed(1)}% in 4 weeks`}
               </span>
               {r.g !== null && r.median !== undefined ? <Against own={r.g} median={r.median} tone={TONE[r.state]} /> : <span />}
-              <span style={{ color: TONE[r.state] }}>{WORD[r.state]}</span>
+              <span className="state" style={{ color: TONE[r.state] }}>
+                <i style={{ background: TONE[r.state] }} />
+                {WORD[r.state]}
+              </span>
+              <Link className="btn ghost sm" href={`/c/${id}/health/${encodeURIComponent(r.channel)}`}>
+                See analytics
+              </Link>
             </div>
           ))}
           <p className="mute small" style={{ marginTop: 10 }}>

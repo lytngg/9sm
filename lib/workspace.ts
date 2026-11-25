@@ -27,7 +27,8 @@ export const MAX_UPLOAD = 4 * 1024 * 1024;
 export const pick = (formData: FormData, key: string, allowed: string[]) =>
   formData.getAll(key).map(String).filter((v) => allowed.includes(v));
 
-export const REQUEST_KINDS = ["Offer", "Product news", "Event", "Other"];
+// What a client can put on the calendar for us to post about.
+export const REQUEST_KINDS = ["Casino offer", "Sports offer", "Event", "Birthday or anniversary", "Product news", "Other"];
 
 // Loads the signed-in person and the client workspace they asked for.
 // The database rules return nothing if they may not see it.
