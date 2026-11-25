@@ -204,11 +204,16 @@ label.check input{width:auto;accent-color:var(--purple)}
 
 /* ---------- scope against delivery ---------- */
 .scope{margin-bottom:36px}
-.scope-head,.scope-row{display:grid;grid-template-columns:minmax(160px,1.3fr) 1fr 1.4fr 90px;gap:20px;align-items:center}
+.scope-head,.scope-row{display:grid;grid-template-columns:minmax(150px,1fr) 1.4fr 1.4fr 90px;gap:20px;align-items:center}
 .scope-head{color:var(--faint);font-size:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .scope-row{padding:14px 0;border-bottom:1px solid var(--line-soft)}
 .scope-num{font:400 22px/1 var(--display)}
-.ups{color:var(--good);margin-left:8px;letter-spacing:2px;font-size:12px;vertical-align:2px}
+.over{color:var(--good);margin-left:10px;font-size:13px;font-weight:500}
+.track{position:relative;height:6px;background:var(--line);border-radius:3px;margin-top:9px;max-width:260px}
+.track i{position:absolute;top:0;bottom:0;border-radius:3px}
+.track i.met{left:0;background:#3a7f5c}
+.track i.extra{background:var(--good);border-radius:0 3px 3px 0}
+.track b{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--text);border-radius:1px}
 .bar{height:4px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden;max-width:220px}
 .bar i{display:block;height:100%;background:var(--good);border-radius:2px}
 @media (max-width:760px){.scope-head{display:none}.scope-row{grid-template-columns:1fr 1fr}}

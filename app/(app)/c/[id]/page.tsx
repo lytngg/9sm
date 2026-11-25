@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { loadWorkspace } from "@/lib/workspace";
 import { addScopeItem, assignSmm, inviteOperator, logDelivery, removeOperator, removeScopeItem, setPause } from "./actions";
-import { arrows, monthName, monthStart, prevMonthStart } from "@/lib/scope";
+import { monthName, monthStart, overBy, prevMonthStart } from "@/lib/scope";
 
 export default async function Workspace({
   params,
@@ -82,35 +82,34 @@ export default async function Workspace({
             <span>{monthName(thisMonth)} so far</span>
           </div>
           {lines.map((l) => {
-            const up = arrows(l.last, l.monthly_target);
-            const upNow = arrows(l.now, l.monthly_target);
+            // One track per month. The tick is what was promised, and anything past it is drawn brighter.
+            const cell = (done: number) => {
+              const over = overBy(done, l.monthly_target);
+              const scale = Math.max(done, l.monthly_target) * 1.08;
+              const tick = (l.monthly_target / scale) * 100;
+              const fill = (Math.min(done, l.monthly_target) / scale) * 100;
+              const extra = (Math.max(0, done - l.monthly_target) / scale) * 100;
+              return (
+                <div>
+                  <span className="scope-num">{done}</span>
+                  <span className="mute small"> of {l.monthly_target}</span>
+                  {over ? <span className="over">{over}% more than promised</span> : null}
+                  <div className="track" role="img" aria-label={`${done} delivered against ${l.monthly_target} promised`}>
+                    <i className="met" style={{ width: `${fill}%` }} />
+                    <i className="extra" style={{ left: `${tick}%`, width: `${extra}%` }} />
+                    <b style={{ left: `${tick}%` }} />
+                  </div>
+                </div>
+              );
+            };
             return (
               <div className="scope-row" key={l.id}>
                 <div>
                   <b>{l.label}</b>
                   <div className="mute small">{l.monthly_target} a month</div>
                 </div>
-                <div>
-                  <span className="scope-num">{l.last}</span>
-                  <span className="mute small"> of {l.monthly_target}</span>
-                  {up ? (
-                    <span className="ups" role="img" aria-label={`${Math.round((l.last / l.monthly_target - 1) * 100)}% over what was promised`}>
-                      {"▲".repeat(up)}
-                    </span>
-                  ) : null}
-                </div>
-                <div>
-                  <span className="scope-num">{l.now}</span>
-                  <span className="mute small"> of {l.monthly_target}</span>
-                  {upNow ? (
-                    <span className="ups" role="img" aria-label="Already past what was promised this month">
-                      {"▲".repeat(upNow)}
-                    </span>
-                  ) : null}
-                  <div className="bar">
-                    <i style={{ width: `${Math.min(100, (l.now / l.monthly_target) * 100)}%` }} />
-                  </div>
-                </div>
+                {cell(l.last)}
+                {cell(l.now)}
                 {isStaff ? (
                   <form action={removeScopeItem.bind(null, id, l.id)}>
                     <button className="btn ghost sm">Remove</button>
@@ -122,7 +121,7 @@ export default async function Workspace({
             );
           })}
           <p className="mute small" style={{ marginTop: 10 }}>
-            One arrow means we delivered what was promised. Two means 10% more, three means 25% more.
+            The mark on each line is what was promised. Anything past it is extra.
           </p>
         </div>
       ) : null}

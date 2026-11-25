@@ -1,9 +1,7 @@
-// How far over the promised number a month ended. One arrow for hitting it,
-// two for 10% over, three for 25% over.
-export function arrows(delivered: number, target: number) {
-  if (target <= 0 || delivered < target) return 0;
-  const ratio = delivered / target;
-  return ratio >= 1.25 ? 3 : ratio >= 1.1 ? 2 : 1;
+// How far over the promised number a month ended, as a whole percentage. Zero when it was not exceeded.
+export function overBy(delivered: number, target: number) {
+  if (target <= 0 || delivered <= target) return 0;
+  return Math.round((delivered / target - 1) * 100);
 }
 
 export const monthStart = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString().slice(0, 10);
