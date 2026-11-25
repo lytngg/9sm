@@ -267,7 +267,7 @@ export default async function Calendar({
                       </form>
                     ) : null}
                     <Link className="btn ghost sm" href={`/briefs?client=${id}&title=${encodeURIComponent(`${r.kind} for ${r.for_date}`)}&details=${encodeURIComponent(r.details)}&due=${r.for_date}`}>
-                      Brief design or video
+                      Make it a task
                     </Link>
                     <form action={deleteRequest.bind(null, id, r.id)}>
                       <button className="btn ghost sm">Delete</button>

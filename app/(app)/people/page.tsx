@@ -47,7 +47,7 @@ export default async function People() {
                         {mine.length > 4 ? ` and ${mine.length - 4} more` : ""}
                       </div>
                     ) : null}
-                    {n ? <div className="small" style={{ marginTop: 6 }}>{n} open {n === 1 ? "brief" : "briefs"}</div> : null}
+                    {n ? <div className="small" style={{ marginTop: 6 }}>{n} open {n === 1 ? "task" : "tasks"}</div> : null}
                   </div>
                 </div>
               );

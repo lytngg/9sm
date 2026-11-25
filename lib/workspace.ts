@@ -43,3 +43,18 @@ export async function loadWorkspace(id: string) {
 
 export const today = () => new Date().toISOString().slice(0, 10);
 export const str = (formData: FormData, key: string) => String(formData.get(key) ?? "").trim();
+
+// Who a task can be for. Wider than the plugins list, since tasks are internal.
+export const TASK_TEAMS: { key: string; name: string }[] = [
+  { key: "social", name: "Social" },
+  { key: "design", name: "Design" },
+  { key: "video", name: "Video" },
+  { key: "community", name: "Community" },
+  { key: "talent", name: "Talent" },
+  { key: "ops", name: "Operations" },
+  { key: "paid", name: "Paid Media" },
+  { key: "crm", name: "CRM" },
+  { key: "pr", name: "PR" },
+  { key: "clipping", name: "Clipping" },
+];
+export const teamName = (key: string) => TASK_TEAMS.find((t) => t.key === key)?.name ?? key;

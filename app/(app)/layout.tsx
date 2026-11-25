@@ -11,9 +11,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const profile = await requireProfile();
   const supabase = await createClient();
   // Staff get every client here. Operators get only their own, by the database rules.
-  const [{ data: clients }, { data: depts }] = await Promise.all([
+  const [{ data: clients }, { data: depts }, { count: unread }] = await Promise.all([
     supabase.from("clients").select("id, name").order("name"),
     supabase.from("departments").select("key, name").order("position"),
+    supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", profile.id).is("read_at", null),
   ]);
   const isStaff = profile.role === "staff";
   // Looking at the operator side as staff: show the one brand, as that client would see it.
@@ -29,7 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <i />
           <i />
         </div>
-        <SideNav isStaff={isStaff} clients={shown} depts={depts ?? []} />
+        <SideNav isStaff={isStaff} clients={shown} depts={depts ?? []} unread={unread ?? 0} />
         <div className="side-foot">
           <div className="who">
             <span className="signed">Signed in</span>

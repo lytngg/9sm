@@ -337,3 +337,22 @@ label.check input{width:auto;accent-color:var(--purple)}
 .lift{font-weight:600;color:var(--good);white-space:nowrap;font-size:13.5px}
 .chip{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;padding:3px 10px;border-radius:14px;background:var(--raised);border:1px solid var(--line);white-space:nowrap}
 .chip b{color:var(--mute);font-weight:500}
+
+/* ---------- task views ---------- */
+.viewbar{display:flex;justify-content:space-between;align-items:center;gap:14px 24px;flex-wrap:wrap;margin:26px 0 16px}
+.views{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.views a{padding:7px 14px;text-decoration:none;color:var(--mute);font-weight:500;font-size:14px}
+.views a + a{border-left:1px solid var(--line)}
+.views a.on{background:var(--raised);color:var(--text)}
+.board-col.over{border-color:var(--purple);background:rgba(183,125,255,.06)}
+.brief[draggable=true]{cursor:grab}
+.checkrow{display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line-soft)}
+.checkrow form{display:contents}
+.checkbtn{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--faint);background:transparent;cursor:pointer;flex:none;padding:0;display:grid;place-items:center;color:var(--ink);font-size:12px;line-height:1}
+.checkbtn.on{background:var(--good);border-color:var(--good)}
+.checkrow .done{color:var(--mute);text-decoration:line-through}
+.checkrow .x{margin-left:auto;background:none;border:0;color:var(--faint);cursor:pointer;font-size:13px}
+.checkrow .x:hover{color:var(--bad)}
+.progress{height:5px;border-radius:3px;background:var(--line);overflow:hidden;margin:8px 0 6px}
+.progress i{display:block;height:100%;background:var(--good)}
+.badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--pink);color:#fff;font-size:11px;font-weight:600;margin-left:auto}

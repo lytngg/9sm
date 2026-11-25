@@ -9,7 +9,7 @@ type Dept = { key: string; name: string };
 // The left rail. Everything a person can open lives here, so there is one
 // place to look. Staff find a client through All clients, which has search. Inside a client workspace it lists that workspace's pages
 // and the plugins underneath.
-export function SideNav({ isStaff, clients, depts }: { isStaff: boolean; clients: Item[]; depts: Dept[] }) {
+export function SideNav({ isStaff, clients, depts, unread = 0 }: { isStaff: boolean; clients: Item[]; depts: Dept[]; unread?: number }) {
   const path = usePathname();
   const open = path.match(/^\/c\/([^/]+)/)?.[1];
 
@@ -62,7 +62,11 @@ export function SideNav({ isStaff, clients, depts }: { isStaff: boolean; clients
       <NavLink href="/clients" exact>
         All clients
       </NavLink>
-      <NavLink href="/briefs">Briefs</NavLink>
+      <NavLink href="/inbox" exact>
+        Inbox
+        {unread ? <span className="badge">{unread}</span> : null}
+      </NavLink>
+      <NavLink href="/briefs">Tasks</NavLink>
       <NavLink href="/trending" exact>
         Trending
       </NavLink>

@@ -231,7 +231,7 @@ begin
   end loop;
 
   -- internal briefs between the teams
-  delete from public.briefs where client_id in (select id from public.clients where type = 'real');
+  delete from public.briefs where client_id is null or client_id in (select id from public.clients where type = 'real');
   insert into public.briefs (client_id, team, title, details, format, due, urgent, status, assignee, requested_by, delivery_url, updated_at)
   select cl.id, v.team, v.title, v.details, v.format, current_date + v.due_in, v.urgent, v.status,
          case when v.status = 'Requested' then null when v.team = 'design' then (select id from public.profiles where email = 'leo.demo@example.com')
@@ -259,6 +259,20 @@ begin
   insert into public.brief_notes (brief_id, body, kind, created_by)
   select b.id, 'Can we get the terms line bigger? Compliance flagged it last time.', 'note', callum
   from public.briefs b where b.title = 'Black Friday hero creative';
+
+  insert into public.briefs (client_id, team, title, details, due, status, assignee, requested_by) values
+    (null, 'ops', 'New client onboarding: Cazzy Games', E'Go-live date: to confirm\nMain contact: to confirm', current_date + 6, 'In progress',
+     (select id from public.profiles where email = 'cathrine.demo@example.com'), (select id from public.profiles where email = 'daisy.demo@example.com')),
+    (c, 'community', 'Run the December giveaway draw in Discord', 'Ten winners, drawn live. Rules pinned the day before.', current_date + 7, 'Requested', null, callum),
+    (c, 'social', 'Captions for Christmas at the castle', 'Fourteen captions to go with the daily tiles.', current_date + 9, 'In progress', callum, ish),
+    (null, 'social', 'Update the offer post checklist', 'Add the new terms line rule.', current_date + 14, 'Requested', null, ish);
+  insert into public.brief_items (brief_id, text, position, done)
+  select b.id, x.text, x.ord - 1,
+         b.status in ('In review', 'Delivered') or (b.status = 'In progress' and x.ord <= 2)
+  from public.briefs b
+  join public.task_templates t on (t.name = 'New client onboarding' and b.title like 'New client onboarding%')
+                               or (t.name <> 'New client onboarding' and t.format = b.format)
+  cross join lateral unnest(t.items) with ordinality x(text, ord);
 
   insert into public.global_events (starts, ends, title, category, regions, tier) values
     (date '2026-12-25', null, 'NBA Christmas Day games', 'Basketball', '{US,Global}', 2),

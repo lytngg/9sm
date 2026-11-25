@@ -104,7 +104,7 @@ export default async function Trending({ searchParams }: { searchParams: Promise
                 className="btn ghost sm"
                 href={`/briefs?title=${encodeURIComponent(`Our take on: ${p.theme.toLowerCase()}`)}&details=${encodeURIComponent(`Inspired by a ${p.format.toLowerCase()} post from ${p.handle}: "${p.text}"`)}`}
               >
-                Brief design or video
+                Make it a task
               </Link>
             </div>
           </div>
