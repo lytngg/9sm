@@ -2,6 +2,8 @@
 -- so the screens have something to show. SirBetalot is a real brand name used
 -- as the example; nothing below is its real data. Remove all of it with:
 --   delete from public.clients where type = 'demo';
+--   delete from public.channel_stats where client_id in (select id from public.clients where type = 'real');
+--   delete from public.client_profile where client_id in (select id from public.clients where type = 'real');
 --   delete from public.talent where bio like 'Demo profile.%';
 --   delete from auth.users where email like '%.demo@example.com';
 do $$
@@ -172,13 +174,13 @@ begin
     ('Telegram',  array[2500,2540,2610,2590,2680,2740,2720,2700,2690,2710])
   ) v(ch, vals) cross join generate_series(0, 9) g(i);
 
-  -- ninety-five more invented brands, so the staff side looks like a real book of clients
+  -- twenty-three invented brands to bring the book up to fifty
   perform setseed(0.42);
   for i in 1..20 loop
     for k in 1..5 loop
       continue when (i * 7 + k * 3) % 20 = 0;
       n := n + 1;
-      exit when n > 95;
+      exit when n > 23;
       insert into public.clients (name, type, tags, markets, smm_id, created_at)
       values (pre[i] || case when suf[k] = 'Bet' then 'Bet' else ' ' || suf[k] end, 'demo',
               case suf[k] when 'Bet' then (case when i % 3 = 0 then '{Sportsbook,Predictions}' else '{Sportsbook}' end)::text[]
@@ -217,6 +219,34 @@ begin
         insert into public.posts (client_id, channels, publish_date, publish_time, body, status)
         select nc, '{X}', current_date + x, '18:00', 'Demo post waiting for the client.', 'Client review' from generate_series(1, 1 + n % 3) x;
       end if;
+    end loop;
+  end loop;
+
+  -- 9SM's actual clients, by name only. Their numbers below are made up like everything else here.
+  -- Type is set only where it is known. No manager is assigned.
+  for other in select * from (values
+      ('96.com', '{"Crypto casino"}'::text[]), ('B2', '{"Sweepstakes casino"}'::text[]), ('Metaspins/Dailyspins', '{}'::text[]),
+      ('Bombastic', '{}'::text[]), ('Zoot', '{}'::text[]), ('Go Go Gold', '{}'::text[]), ('PUBS', '{"Crypto casino"}'::text[]),
+      ('Dara Casino', '{}'::text[]), ('MINT', '{"Crypto casino"}'::text[]), ('VictoryRush', '{}'::text[]), ('Spino', '{}'::text[]),
+      ('Betya', '{}'::text[]), ('Luckycoin', '{}'::text[]), ('Wisespin', '{}'::text[]), ('Rexbet', '{}'::text[]),
+      ('Dooble', '{}'::text[]), ('Safebets', '{}'::text[]), ('Arena365', '{Sportsbook}'::text[]), ('Kickback Casino', '{}'::text[]),
+      ('FastRips', '{"Card rips"}'::text[]), ('Oracle 7', '{}'::text[]), ('Wombet', '{}'::text[]), ('Bit9ja', '{}'::text[]),
+      ('Bolabet', '{}'::text[]), ('Rocketbet', '{Sportsbook}'::text[]), ('Cazzy Games', '{}'::text[])) v(name, tags) loop
+    insert into public.clients (name, type, tags, created_at) values (other.name, 'real', other.tags, now() - interval '200 days')
+      on conflict (name) do nothing;
+    select id into nc from public.clients where name = other.name;
+    insert into public.client_profile (client_id, website, handles, brand_guidelines_url, contact_name, approver_name,
+                                       meeting_slot, design_signed_off, access_confirmed)
+    values (nc, 'https://example.com', 'X, Instagram', 'https://example.com/brand', 'Demo contact', 'Demo contact', 'Weekly', true, true)
+      on conflict (client_id) do nothing;
+    delete from public.channel_stats where client_id = nc;
+    foreach ch in array array['X', 'Instagram', 'TikTok', 'Discord', 'Telegram'] loop
+      base := (2500 + random() * 30000)::int;
+      g := (random() - 0.32) * 0.05;
+      for w in select (date '2026-11-23' - (9 - x) * 7) from generate_series(0, 9) x loop
+        insert into public.channel_stats (client_id, channel, week, followers) values (nc, ch, w, base);
+        base := greatest(200, (base * (1 + g + (random() - 0.5) * 0.02))::int);
+      end loop;
     end loop;
   end loop;
 
