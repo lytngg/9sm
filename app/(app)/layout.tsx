@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/login/actions";
-import { NavLink } from "@/components/nav-link";
+import { SideNav } from "@/components/side-nav";
 import { DEMO_OPEN } from "@/lib/demo";
 import { setView } from "./view-actions";
 
@@ -10,7 +10,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const profile = await requireProfile();
   const supabase = await createClient();
   // Staff get every client here. Operators get only their own, by the database rules.
-  const { data: clients } = await supabase.from("clients").select("id, name").order("name");
+  const [{ data: clients }, { data: depts }] = await Promise.all([
+    supabase.from("clients").select("id, name").order("name"),
+    supabase.from("departments").select("key, name").order("position"),
+  ]);
   const isStaff = profile.role === "staff";
   return (
     <div className="shell">
@@ -23,36 +26,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <i />
           <i />
         </div>
-        <nav className="side-scroll">
-          {isStaff ? (
-            <>
-              <NavLink href="/clients" exact>
-                All clients
-              </NavLink>
-              <NavLink href="/onboarding" exact>
-                Onboarding
-              </NavLink>
-              <NavLink href="/talent" exact>
-                Talent
-              </NavLink>
-              <NavLink href="/departments" exact>
-                Teams
-              </NavLink>
-              <NavLink href="/events" exact>
-                Events
-              </NavLink>
-            </>
-          ) : null}
-          <div className="side-label">{isStaff ? "Clients" : "Your workspaces"}</div>
-          {(clients ?? []).map((c) => (
-            <NavLink key={c.id} href={`/c/${c.id}`}>
-              {c.name}
-            </NavLink>
-          ))}
-          {!clients || clients.length === 0 ? <div className="side-label">None yet</div> : null}
-        </nav>
+        <SideNav isStaff={isStaff} clients={clients ?? []} depts={depts ?? []} />
         <div className="side-foot">
           <div className="who">
+            <span className="signed">Signed in</span>
             <b>{profile.email}</b>
             {isStaff ? "9SM staff" : profile.preview ? "Operator view" : "Operator"}
           </div>

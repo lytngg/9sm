@@ -1,85 +1,51 @@
 import Link from "next/link";
 import { loadWorkspace } from "@/lib/workspace";
-import { askDepartment, setPlugin } from "./actions";
+import { PLUGINS } from "@/lib/plugins";
 
 type Dept = { key: string; name: string; blurb: string | null; lead_name: string | null };
-const PILL: Record<string, string> = { New: "pill purple", "Picked up": "pill purple", Done: "pill good" };
 
-export default async function Plugins({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; sent?: string }>;
-}) {
+export default async function Plugins({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { error, sent } = await searchParams;
   const { supabase, isStaff } = await loadWorkspace(id);
   const [{ data: depts }, { data: have }, { data: requests }] = await Promise.all([
     supabase.from("departments").select("key, name, blurb, lead_name").order("position"),
     supabase.from("client_plugins").select("dept_key").eq("client_id", id),
-    supabase.from("department_requests").select("id, dept_key, message, status, created_at").eq("client_id", id).order("created_at", { ascending: false }),
+    supabase.from("department_requests").select("dept_key, status").eq("client_id", id),
   ]);
   const active = new Set((have ?? []).map((h) => h.dept_key));
+  const openCount = new Map<string, number>();
+  (requests ?? []).forEach((r) => {
+    if (r.status !== "Done") openCount.set(r.dept_key, (openCount.get(r.dept_key) ?? 0) + 1);
+  });
   const list = (depts ?? []) as Dept[];
-  const nameOf = new Map(list.map((d) => [d.key, d.name]));
+  const card = (d: Dept) => (
+    <Link key={d.key} className="plug-card" href={d.key === "talent" ? `/c/${id}/talent` : `/c/${id}/plugins/${d.key}`}>
+      <b>{d.name}</b>
+      <p>{PLUGINS[d.key]?.tagline ?? d.blurb}</p>
+      <span className={active.has(d.key) ? "pill good" : "pill"}>
+        {active.has(d.key) ? (openCount.get(d.key) ? `${openCount.get(d.key)} in progress` : "On your plan") : "See what it does"}
+      </span>
+    </Link>
+  );
+  const mine = list.filter((d) => active.has(d.key));
+  const rest = list.filter((d) => !active.has(d.key));
   return (
     <>
-      {error ? <div className="msg">{error}</div> : null}
-      {sent ? <div className="msg ok">Sent to the {sent} team. They will pick it up in Slack.</div> : null}
-      <p className="sub" style={{ marginTop: 0 }}>
-        {isStaff
-          ? "The 9SM teams this client can use. Tick the ones they already have."
-          : "Everything else 9SM can do for you. Send any team a message and they will pick it up in Slack."}
+      <h2 style={{ marginTop: 0 }}>Plugins</h2>
+      <p className="sub" style={{ marginTop: 4 }}>
+        {isStaff ? "The 9SM teams this client can use. Open one to add it to their plan." : "The other 9SM teams you can plug into your account."}
       </p>
-      <div className="people">
-        {list.map((d) => (
-          <div key={d.key} className="person" style={{ display: "block" }}>
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <b className="person-name">{d.name}</b>
-              <span className={active.has(d.key) ? "pill good" : "pill"}>{active.has(d.key) ? "Part of your plan" : "Available"}</span>
-            </div>
-            {d.blurb ? <p className="post-body" style={{ margin: "6px 0" }}>{d.blurb}</p> : null}
-            {d.lead_name ? <div className="mute small">Your contact is {d.lead_name}</div> : null}
-            {d.key === "talent" ? (
-              <p className="small" style={{ margin: "8px 0 0" }}>
-                <Link href={`/c/${id}/talent`}>See talent picked for you</Link>
-              </p>
-            ) : null}
-            <form className="row" action={askDepartment.bind(null, id, d.key)} style={{ marginTop: 10 }}>
-              <input type="text" name="message" placeholder={`What do you need from ${d.name}?`} style={{ flex: 1, minWidth: 200 }} required />
-              <button className="btn sm">Send</button>
-            </form>
-            {isStaff ? (
-              <form action={setPlugin.bind(null, id, d.key, !active.has(d.key))} style={{ marginTop: 8 }}>
-                <button className="btn ghost sm">{active.has(d.key) ? "Remove from their plan" : "Mark as part of their plan"}</button>
-              </form>
-            ) : null}
-          </div>
-        ))}
-      </div>
-      {list.length === 0 ? <p className="empty">Nothing to show yet.</p> : null}
-
-      {requests && requests.length ? (
-        <>
-          <h2 style={{ marginTop: 36 }}>{isStaff ? "Requests from this client" : "What you have asked for"}</h2>
-          <div className="tw">
-            <table>
-              <tbody>
-                {requests.map((r) => (
-                  <tr key={r.id}>
-                    <td>{nameOf.get(r.dept_key) ?? r.dept_key}</td>
-                    <td>{r.message}</td>
-                    <td>{String(r.created_at).slice(0, 10)}</td>
-                    <td>
-                      <span className={PILL[r.status] ?? "pill"}>{r.status}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+      {mine.length ? (
+        <section className="plug-sec" style={{ marginTop: 24 }}>
+          <h3>{isStaff ? "On their plan" : "On your plan"}</h3>
+          <div className="plug-grid" style={{ marginTop: 14 }}>{mine.map(card)}</div>
+        </section>
+      ) : null}
+      {rest.length ? (
+        <section className="plug-sec">
+          <h3>Add to your plan</h3>
+          <div className="plug-grid" style={{ marginTop: 14 }}>{rest.map(card)}</div>
+        </section>
       ) : null}
     </>
   );
