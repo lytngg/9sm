@@ -62,6 +62,10 @@ export function SideNav({ isStaff, clients, depts }: { isStaff: boolean; clients
       <NavLink href="/clients" exact>
         All clients
       </NavLink>
+      <NavLink href="/briefs">Briefs</NavLink>
+      <NavLink href="/trending" exact>
+        Trending
+      </NavLink>
       <NavLink href="/onboarding" exact>
         Onboarding
       </NavLink>

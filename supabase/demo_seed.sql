@@ -18,7 +18,9 @@ begin
   for who in select * from (values
       ('callum.demo@example.com', 'Callum James', 'Social Lead'),
       ('pat.demo@example.com', 'Patricio Aréchiga', 'Team Lead, North America'),
-      ('ish.demo@example.com', 'Ishpal Singh', 'Head of Social')) v(email, full_name, title) loop
+      ('ish.demo@example.com', 'Ishpal Singh', 'Head of Social'),
+      ('leo.demo@example.com', 'Leo', 'Design lead'),
+      ('otto.demo@example.com', 'Otto', 'Video lead')) v(email, full_name, title) loop
     if not exists (select 1 from auth.users where email = who.email) then
       insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
                               raw_app_meta_data, raw_user_meta_data, created_at, updated_at, is_anonymous)
@@ -27,7 +29,8 @@ begin
     end if;
     insert into public.profiles (id, email, role) select id, email, 'staff' from auth.users where email = who.email
       on conflict (id) do nothing;
-    update public.profiles set role = 'staff', full_name = who.full_name, title = who.title, team = 'Social' where email = who.email;
+    update public.profiles set role = 'staff', full_name = who.full_name, title = who.title,
+      team = case when who.email like 'leo.%' then 'Design' when who.email like 'otto.%' then 'Video' else 'Social' end where email = who.email;
   end loop;
   select id into callum from public.profiles where email = 'callum.demo@example.com';
   select id into pat from public.profiles where email = 'pat.demo@example.com';
@@ -202,6 +205,36 @@ begin
       end loop;
     end loop;
   end loop;
+
+  -- internal briefs between the teams
+  delete from public.briefs where client_id in (select id from public.clients where type = 'real');
+  insert into public.briefs (client_id, team, title, details, format, due, urgent, status, assignee, requested_by, delivery_url, updated_at)
+  select cl.id, v.team, v.title, v.details, v.format, current_date + v.due_in, v.urgent, v.status,
+         case when v.status = 'Requested' then null when v.team = 'design' then (select id from public.profiles where email = 'leo.demo@example.com')
+              else (select id from public.profiles where email = 'otto.demo@example.com') end,
+         case when v.by = 'pat' then pat else callum end,
+         case when v.status in ('In review', 'Delivered') then 'https://example.com/work' end,
+         now() - (v.age || ' hours')::interval
+  from (values
+    ('SirBetalot', 'design', 'Black Friday hero creative', 'Deposit match up to 100. One hero and cut-downs for X, Instagram and Facebook.', 'Offer creative', 1, true, 'In review', 'callum', 5),
+    ('SirBetalot', 'design', 'Christmas at the castle, 14 daily tiles', 'One tile per day from the 12th. Same frame, new prize each day.', 'Social post image', 12, false, 'In progress', 'callum', 30),
+    ('SirBetalot', 'video', 'Meet the Sirs, episode 3', 'The Sir who answers messages at 4am. 40 seconds, vertical.', 'Short vertical video', 3, false, 'In progress', 'callum', 20),
+    ('SirBetalot', 'video', 'New slots walkthrough', 'Three minutes with the host. Horizontal for YouTube, plus a vertical cut.', 'YouTube video', 8, false, 'Requested', 'callum', 3),
+    ('SirBetalot', 'design', 'Second birthday logo and avatars', 'Birthday dress for the logo, avatar and headers. Live on the 9th.', 'Seasonal refresh', 10, false, 'Requested', 'callum', 2),
+    ('96.com', 'design', 'Tournament leaderboard graphic', 'Weekly top ten template we can update ourselves.', 'Social post image', 4, false, 'Requested', 'callum', 6),
+    ('PUBS', 'design', 'Christmas pub quiz assets', 'Five question cards and a winner card.', 'Social post image', 6, false, 'In progress', 'callum', 26),
+    ('MINT', 'video', 'Token explainer, 30 seconds', 'What the token does for a player, in plain words.', 'Motion graphic', -1, false, 'In progress', 'callum', 70),
+    ('B2', 'design', 'Daily streak banner set', 'Site and affiliate sizes.', 'Banner set', 5, false, 'In review', 'pat', 9),
+    ('FastRips', 'video', 'Rip of the week cut', 'Best pull from this week, 20 seconds.', 'Short vertical video', 2, true, 'Requested', 'pat', 1),
+    ('Arena365', 'design', 'Boxing Day fixtures card', 'All the kick-offs on one image.', 'Social post image', 20, false, 'Requested', 'callum', 12),
+    ('Rocketbet', 'video', 'Weekend recap template', 'A template we can refill every Monday.', 'X video', 9, false, 'Delivered', 'callum', 50),
+    ('Wombet', 'design', 'New avatar set', 'Three options on the current mark.', 'Logo or brand asset', -3, false, 'Delivered', 'callum', 90),
+    ('Spino', 'design', 'Welcome offer creative', 'Hero and two cut-downs.', 'Offer creative', 2, false, 'Delivered', 'callum', 120)
+  ) v(client, team, title, details, format, due_in, urgent, status, by, age)
+  join public.clients cl on cl.name = v.client;
+  insert into public.brief_notes (brief_id, body, kind, created_by)
+  select b.id, 'Can we get the terms line bigger? Compliance flagged it last time.', 'note', callum
+  from public.briefs b where b.title = 'Black Friday hero creative';
 
   insert into public.global_events (starts, ends, title, category, regions, tier) values
     (date '2026-12-25', null, 'NBA Christmas Day games', 'Basketball', '{US,Global}', 2),
