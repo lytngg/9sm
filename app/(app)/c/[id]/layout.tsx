@@ -38,6 +38,7 @@ export default async function WorkspaceLayout({
         <NavLink href={`/c/${id}`} exact>
           Overview
         </NavLink>
+        <NavLink href={`/c/${id}/health`}>Channel health</NavLink>
         <NavLink href={`/c/${id}/calendar`}>Calendar</NavLink>
         <NavLink href={`/c/${id}/posts`}>{isStaff ? "Posts and approvals" : "Approvals"}</NavLink>
         <NavLink href={`/c/${id}/requests`}>Requests</NavLink>

@@ -173,3 +173,26 @@ label.check input{width:auto;accent-color:var(--purple)}
 .person{display:flex;gap:14px;align-items:flex-start;padding:18px 0;border-top:1px solid var(--line-soft)}
 .person-name{font-size:16px}
 @media (max-width:520px){.post-main{flex-direction:column}.people{grid-template-columns:1fr}}
+
+/* ---------- talent: featured picks ---------- */
+.price{margin-top:4px;font-weight:600}
+.spot{margin-bottom:34px}
+.person.pitched{position:relative;border:1px solid transparent;border-radius:12px;padding:20px;margin-bottom:12px;
+  background:linear-gradient(var(--surface),var(--surface)) padding-box,
+             conic-gradient(from var(--turn),var(--purple),var(--pink),var(--blue),var(--purple)) border-box;
+  animation:turn 7s linear infinite}
+.pitch-line{font-size:13px;margin-bottom:8px;color:var(--text)}
+.pitch-line::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--pink);margin-right:8px;animation:beat 1.8s ease-in-out infinite}
+@property --turn{syntax:"<angle>";inherits:false;initial-value:0deg}
+@keyframes turn{to{--turn:360deg}}
+@keyframes beat{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.person.pitched{animation:none}.pitch-line::before{animation:none}}
+
+/* ---------- channel health ---------- */
+.note{max-width:720px;margin-bottom:34px}
+.note-body{font-size:17px;line-height:1.65;white-space:pre-wrap;margin:0}
+.strip-row{display:grid;grid-template-columns:110px minmax(120px,1fr) 150px 150px 150px 130px;gap:16px;align-items:center;padding:14px 0;border-top:1px solid var(--line-soft)}
+.strip-row:first-child{border-top:1px solid var(--line)}
+.spark{width:100%;height:28px;display:block}
+.against{width:150px;height:20px;display:block}
+@media (max-width:900px){.strip-row{grid-template-columns:1fr 1fr;gap:6px 16px}}

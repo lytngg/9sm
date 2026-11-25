@@ -79,3 +79,26 @@ export async function expressInterest(clientId: string, talentId: string, formDa
   revalidatePath("/talent");
   back(`/c/${clientId}/talent`, error ? "Could not send that. Try again." : undefined);
 }
+
+// Staff put one person in front of one client, with a line on why.
+export async function pitchTalent(clientId: string, talentId: string, formData: FormData) {
+  await requireStaff();
+  const path = `/c/${clientId}/talent`;
+  const headline = str(formData, "headline");
+  if (!headline) back(path, "Add a line on why this person suits them.");
+  const supabase = await createClient();
+  const { error } = await supabase.from("talent_pitch").upsert({
+    client_id: clientId,
+    talent_id: talentId,
+    headline,
+    available_until: str(formData, "until") || null,
+  });
+  back(path, error ? "Could not save that pitch." : undefined);
+}
+
+export async function removePitch(clientId: string, talentId: string) {
+  await requireStaff();
+  const supabase = await createClient();
+  const { error } = await supabase.from("talent_pitch").delete().eq("client_id", clientId).eq("talent_id", talentId);
+  back(`/c/${clientId}/talent`, error ? "Could not remove that pitch." : undefined);
+}
