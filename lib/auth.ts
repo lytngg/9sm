@@ -1,8 +1,12 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { VIEW_COOKIE } from "@/lib/demo";
 import { createClient } from "@/lib/supabase/server";
 
 export type Role = "pending" | "staff" | "operator";
-export type Profile = { id: string; email: string; role: Role };
+// preview is true when a staff member is looking at the operator side.
+// The database still treats them as staff; only the screens change.
+export type Profile = { id: string; email: string; role: Role; preview?: boolean };
 
 // The signed-in user's profile, or a redirect to /login.
 export async function requireProfile(): Promise<Profile> {
@@ -15,6 +19,9 @@ export async function requireProfile(): Promise<Profile> {
     .eq("id", data.user.id)
     .maybeSingle();
   if (!profile) redirect("/pending");
+  if (profile.role === "staff" && (await cookies()).get(VIEW_COOKIE)?.value === "operator") {
+    return { ...(profile as Profile), role: "operator", preview: true };
+  }
   return profile as Profile;
 }
 

@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { DEMO_OPEN } from "@/lib/demo";
 
 // Runs before every page: keeps the session fresh and sends signed-out
 // visitors to the login page. Real access control lives in the database rules.
@@ -20,6 +21,11 @@ export async function proxy(request: NextRequest) {
     },
   );
   const { data } = await supabase.auth.getUser();
+  if (!data.user && DEMO_OPEN && !request.nextUrl.pathname.startsWith("/login")) {
+    // Demo mode: give the visitor an anonymous session instead of the login page.
+    const { data: anon } = await supabase.auth.signInAnonymously();
+    if (anon.user) return response;
+  }
   if (!data.user && !request.nextUrl.pathname.startsWith("/login")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

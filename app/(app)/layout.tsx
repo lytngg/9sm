@@ -3,6 +3,8 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/login/actions";
 import { NavLink } from "@/components/nav-link";
+import { DEMO_OPEN } from "@/lib/demo";
+import { setView } from "./view-actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile();
@@ -52,17 +54,27 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="side-foot">
           <div className="who">
             <b>{profile.email}</b>
-            {isStaff ? "9SM staff" : "Operator"}
+            {isStaff ? "9SM staff" : profile.preview ? "Operator view" : "Operator"}
           </div>
+          {isStaff || profile.preview ? (
+            <form action={setView} style={{ marginBottom: 8 }}>
+              <input type="hidden" name="view" value={isStaff ? "operator" : "staff"} />
+              <button className="btn sm" style={{ width: "100%" }}>
+                {isStaff ? "See the operator side" : "Back to the staff side"}
+              </button>
+            </form>
+          ) : null}
           <div className="row">
             {isStaff ? (
               <Link className="btn ghost sm" href="/profile">
                 Your profile
               </Link>
             ) : null}
-            <form action={signOut}>
-              <button className="btn ghost sm">Sign out</button>
-            </form>
+            {DEMO_OPEN ? null : (
+              <form action={signOut}>
+                <button className="btn ghost sm">Sign out</button>
+              </form>
+            )}
           </div>
         </div>
       </aside>
