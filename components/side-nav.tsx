@@ -72,6 +72,9 @@ export function SideNav({ isStaff, clients, depts }: { isStaff: boolean; clients
       <NavLink href="/talent" exact>
         Talent
       </NavLink>
+      <NavLink href="/people" exact>
+        People
+      </NavLink>
       <NavLink href="/departments" exact>
         Teams
       </NavLink>

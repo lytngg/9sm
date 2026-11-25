@@ -15,12 +15,34 @@ declare
   suf text[] := array['Bet','Casino','Spins','Sweeps','Rips'];
 begin
   -- demo staff, so clients have a named social media manager
+  -- the 9SM team, as placeholder profiles. The emails are not real, so nobody can sign in as them.
   for who in select * from (values
-      ('callum.demo@example.com', 'Callum James', 'Social Lead'),
-      ('pat.demo@example.com', 'Patricio Aréchiga', 'Team Lead, North America'),
-      ('ish.demo@example.com', 'Ishpal Singh', 'Head of Social'),
-      ('leo.demo@example.com', 'Leo', 'Design lead'),
-      ('otto.demo@example.com', 'Otto', 'Video lead')) v(email, full_name, title) loop
+      ('callum.demo@example.com', 'Callum James', 'Senior SMM', 'Social'),
+      ('cathrine.demo@example.com', 'Cathrine Simpson', 'Head of Ops', 'Operations'),
+      ('daniel.e.demo@example.com', 'Daniel E', 'Talent Manager', 'Talent'),
+      ('daniel.goodluck.demo@example.com', 'Daniel Goodluck', 'SMM', 'Social'),
+      ('ish.demo@example.com', 'Ishpal Singh', 'Head of Social', 'Social'),
+      ('pat.demo@example.com', 'Patricio Riveroll', 'Senior SMM', 'Social'),
+      ('renaldo.demo@example.com', 'Renaldo Abrahams', 'SMM', 'Social'),
+      ('leo.demo@example.com', 'Leonit Gashi', 'Head of Design', 'Design'),
+      ('daisy.demo@example.com', 'Daisy Jacob', 'Operations Manager', 'Operations'),
+      ('erolinda.demo@example.com', 'Erolinda Osmanaj', 'Designer', 'Design'),
+      ('otto.demo@example.com', 'Otto Kitsik', 'Video Editor', 'Video'),
+      ('robbie.demo@example.com', 'Robbie Singh', 'Head of Paid Media', 'Paid Media'),
+      ('stergios.demo@example.com', 'Stergios', 'Paid Media Specialist', 'Paid Media'),
+      ('miguel.demo@example.com', 'Miguel Fernandez', 'Community Lead', 'Community'),
+      ('wissal.demo@example.com', 'Wissal Mohamed', 'Talent Manager', 'Talent'),
+      ('daniel.umana.demo@example.com', 'Daniel Umana', 'Community Manager', 'Community'),
+      ('alvaro.demo@example.com', 'Alvaro Aicardo', 'Community Manager', 'Community'),
+      ('divine.demo@example.com', 'Divine Akudihor', 'Community Manager', 'Community'),
+      ('julia.demo@example.com', 'Julia Fernandez', 'Community Manager', 'Community'),
+      ('mateo.demo@example.com', 'Mateo Espindola', 'Community Manager', 'Community'),
+      ('pedro.demo@example.com', 'Pedro Carvalho', 'SMM', 'Social'),
+      ('emilio.demo@example.com', 'Emilio E', 'Junior SMM', 'Social'),
+      ('liezl.demo@example.com', 'Liezl Leine Perez', 'SMM', 'Social'),
+      ('antony.demo@example.com', 'Antony Micheal', 'SMM', 'Social'),
+      ('johnny.demo@example.com', 'Johnny Dysoco', 'Community Manager', 'Community'),
+      ('diogo.demo@example.com', 'Diogo Tavares', 'SMM', 'Social')) v(email, full_name, title, team) loop
     if not exists (select 1 from auth.users where email = who.email) then
       insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
                               raw_app_meta_data, raw_user_meta_data, created_at, updated_at, is_anonymous)
@@ -29,9 +51,11 @@ begin
     end if;
     insert into public.profiles (id, email, role) select id, email, 'staff' from auth.users where email = who.email
       on conflict (id) do nothing;
-    update public.profiles set role = 'staff', full_name = who.full_name, title = who.title,
-      team = case when who.email like 'leo.%' then 'Design' when who.email like 'otto.%' then 'Video' else 'Social' end where email = who.email;
+    update public.profiles set role = 'staff', full_name = who.full_name, title = who.title, team = who.team where email = who.email;
   end loop;
+  update public.departments set lead_name = 'Leonit Gashi' where key = 'design';
+  update public.departments set lead_name = 'Otto Kitsik' where key = 'video';
+  update public.departments set lead_name = 'Miguel Fernandez' where key = 'community';
   select id into callum from public.profiles where email = 'callum.demo@example.com';
   select id into pat from public.profiles where email = 'pat.demo@example.com';
   select id into ish from public.profiles where email = 'ish.demo@example.com';
