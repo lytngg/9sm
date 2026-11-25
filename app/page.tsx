@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 export default async function Home() {
   const profile = await requireProfile();
   if (profile.role === "staff") redirect("/clients");
+  if (profile.previewClient) redirect(`/c/${profile.previewClient}`);
   if (profile.role === "operator") {
     const supabase = await createClient();
     const { data } = await supabase.from("clients").select("id").order("name").limit(1);

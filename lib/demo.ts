@@ -6,3 +6,4 @@ export const DEMO_OPEN = true;
 
 // Staff can look at the site the way an operator sees it.
 export const VIEW_COOKIE = "view_as";
+export const VIEW_CLIENT_COOKIE = "view_client";

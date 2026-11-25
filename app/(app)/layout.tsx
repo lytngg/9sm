@@ -3,6 +3,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/login/actions";
 import { SideNav } from "@/components/side-nav";
+import { ViewSwitch } from "@/components/view-switch";
 import { DEMO_OPEN } from "@/lib/demo";
 import { setView } from "./view-actions";
 
@@ -15,6 +16,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     supabase.from("departments").select("key, name").order("position"),
   ]);
   const isStaff = profile.role === "staff";
+  // Looking at the operator side as staff: show the one brand, as that client would see it.
+  const shown = (clients ?? []).filter((c) => !profile.previewClient || c.id === profile.previewClient);
   return (
     <div className="shell">
       <aside className="side">
@@ -26,7 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <i />
           <i />
         </div>
-        <SideNav isStaff={isStaff} clients={clients ?? []} depts={depts ?? []} />
+        <SideNav isStaff={isStaff} clients={shown} depts={depts ?? []} />
         <div className="side-foot">
           <div className="who">
             <span className="signed">Signed in</span>
@@ -34,12 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {isStaff ? "9SM staff" : profile.preview ? "Operator view" : "Operator"}
           </div>
           {isStaff || profile.preview ? (
-            <form action={setView} style={{ marginBottom: 8 }}>
-              <input type="hidden" name="view" value={isStaff ? "operator" : "staff"} />
-              <button className="btn sm" style={{ width: "100%" }}>
-                {isStaff ? "See the operator side" : "Back to the staff side"}
-              </button>
-            </form>
+            <ViewSwitch action={setView} toOperator={isStaff} />
           ) : null}
           <div className="row">
             {isStaff ? (
