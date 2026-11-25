@@ -34,6 +34,12 @@ export default async function WorkspaceLayout({
           </div>
         ) : null}
       </div>
+      {client.paused_at ? (
+        <div className="paused" role="alert">
+          <b>All posting is paused.</b> {client.pause_reason ? `Reason: ${client.pause_reason}. ` : ""}
+          Nothing goes out until it is resumed from the Overview tab.
+        </div>
+      ) : null}
       <nav className="tabs">
         <NavLink href={`/c/${id}`} exact>
           Overview
@@ -43,6 +49,7 @@ export default async function WorkspaceLayout({
         <NavLink href={`/c/${id}/posts`}>{isStaff ? "Posts and approvals" : "Approvals"}</NavLink>
         <NavLink href={`/c/${id}/requests`}>Requests</NavLink>
         <NavLink href={`/c/${id}/talent`}>Talent</NavLink>
+        <NavLink href={`/c/${id}/plugins`}>Plugins</NavLink>
         <NavLink href={`/c/${id}/hub`}>{isStaff ? "Onboarding and hub" : "Your brand"}</NavLink>
       </nav>
       {children}

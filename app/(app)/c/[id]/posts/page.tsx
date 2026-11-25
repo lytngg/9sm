@@ -33,6 +33,9 @@ export default async function Posts({
     .order("publish_time");
 
   const images = await signedUrls(supabase, (posts ?? []).map((p) => p.image_path));
+  const { data: rules } = isStaff
+    ? await supabase.from("client_profile").select("*").eq("client_id", id).maybeSingle()
+    : { data: null };
 
   const list = (
     <div className="card">
@@ -134,6 +137,14 @@ export default async function Posts({
       <div className="grid">
         <div className="card">
           <h2>New post</h2>
+          {rules?.compliance_notes || rules?.restricted_markets || rules?.tone_notes ? (
+            <div className="rules">
+              <b>Check before you write</b>
+              {rules.compliance_notes ? <p>Compliance: {rules.compliance_notes}</p> : null}
+              {rules.restricted_markets ? <p>Cannot take players from: {rules.restricted_markets}</p> : null}
+              {rules.tone_notes ? <p>Tone: {rules.tone_notes}</p> : null}
+            </div>
+          ) : null}
           <form className="f" action={addPost.bind(null, id)}>
             <label>
               Post

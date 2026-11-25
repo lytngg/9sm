@@ -116,9 +116,13 @@ Our own, no outside service. A short link per post or streamer that records the 
 
 ## 10. Slack
 
+The simple version is built and dormant. Set `SLACK_WEBHOOK_URL` in Vercel to an incoming webhook for a 9SM channel and it starts posting. Add a Slack member ID to a team on the Teams page and that person is tagged.
+
 | Feature | How | Trigger | Status |
 |---|---|---|---|
-| Tell the talent team about a new request | Incoming webhook to a channel | When a client clicks "I'm interested" | Not built |
+| Tell the talent team about a new request | Incoming webhook to a channel | When a client clicks "I'm interested" | Built, needs the webhook address |
+| Tell a department a client has a request | Incoming webhook, tagging the team's contact | When a client messages a team from Plugins | Built, needs the webhook address |
+| Tell everyone posting is paused | Incoming webhook | When anyone presses pause | Built, needs the webhook address |
 | Tell the SMM about a new client request | Incoming webhook | When a request is sent | Not built |
 | Approve a post from Slack | Slack app with buttons that call `/api/hooks/slack` | When a post reaches client review | Not built |
 
@@ -142,6 +146,19 @@ Booking the intro call and the weekly slot. Start with a booking link stored on 
 ## 13. Trust and reputation
 
 Mentions on X come from the X integration above. Reddit has an API. Review sites mostly do not offer one for reading other companies' reviews, and scraping them breaks their terms. Start with the community team logging complaints by hand, by theme.
+
+## 14. Sports and esports dates
+
+The shared events list is typed or pasted in by staff today. It can be filled automatically later.
+
+| Feature | Source | Trigger | Lands in | Status |
+|---|---|---|---|---|
+| Esports tournaments and matches | PandaScore, whose free plan includes fixtures | Daily job | `global_events` | Table ready |
+| Football fixtures and finals | API-Football or football-data.org | Daily job | `global_events` | Table ready |
+| Other sports | TheSportsDB, which has a free tier | Daily job | `global_events` | Table ready |
+
+- **The hard part is not the data.** A feed returns thousands of fixtures. Someone still has to decide which few are tier 1. The job should bring events in as tier 3 and let staff promote the ones that matter.
+- **Check each provider's terms** for commercial use before relying on a free plan.
 
 ## What every integration shares
 

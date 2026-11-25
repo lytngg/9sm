@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireProfile, requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { notifySlack } from "@/lib/slack";
 import { INTEREST_STAGES, MARKETS, OPERATOR_TAGS, pick, str, TALENT_PLATFORMS } from "@/lib/workspace";
 
 const PHOTO_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
@@ -76,6 +77,15 @@ export async function expressInterest(clientId: string, talentId: string, formDa
     p_talent: talentId,
     p_note: str(formData, "note"),
   });
+  if (!error) {
+    const [{ data: c }, { data: d }, { data: matches }] = await Promise.all([
+      supabase.from("clients").select("name").eq("id", clientId).maybeSingle(),
+      supabase.from("departments").select("slack_member_id").eq("key", "talent").maybeSingle(),
+      supabase.rpc("talent_for_client", { p_client: clientId }),
+    ]);
+    const who = ((matches ?? []) as { id: string; name: string }[]).find((m) => m.id === talentId)?.name ?? "someone on the roster";
+    await notifySlack(`${c?.name ?? "A client"} is interested in ${who}.`, d?.slack_member_id);
+  }
   revalidatePath("/talent");
   back(`/c/${clientId}/talent`, error ? "Could not send that. Try again." : undefined);
 }

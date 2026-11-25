@@ -2,7 +2,7 @@ import Link from "next/link";
 import { loadWorkspace, today } from "@/lib/workspace";
 import { addCalendarEntry, deleteCalendarEntry } from "../workspace-actions";
 
-type Item = { date: string; cls: string; text: string; entryId?: string };
+type Item = { date: string; cls: string; text: string; entryId?: string; approve?: boolean };
 
 export default async function Calendar({
   params,
@@ -13,7 +13,7 @@ export default async function Calendar({
 }) {
   const { id } = await params;
   const { m, error } = await searchParams;
-  const { supabase, isStaff } = await loadWorkspace(id);
+  const { supabase, isStaff, client } = await loadWorkspace(id);
 
   const now = today();
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(m ?? "") ? (m as string) : now.slice(0, 7);
@@ -25,14 +25,34 @@ export default async function Calendar({
   const shift = (n: number) => new Date(Date.UTC(y, mo - 1 + n, 1)).toISOString().slice(0, 7);
   const title = new Date(Date.UTC(y, mo - 1, 1)).toLocaleString("en", { month: "long", year: "numeric", timeZone: "UTC" });
 
-  const [{ data: entries }, { data: posts }, { data: requests }] = await Promise.all([
+  const level: number = client.event_level ?? 1;
+  const [{ data: entries }, { data: posts }, { data: requests }, { data: shared }] = await Promise.all([
     supabase.from("calendar_entries").select("id, date, kind, text").eq("client_id", id).gte("date", from).lte("date", to),
     supabase.from("posts").select("publish_date, channels, body, status").eq("client_id", id).gte("publish_date", from).lte("publish_date", to),
     supabase.from("requests").select("for_date, kind, details").eq("client_id", id).gte("for_date", from).lte("for_date", to),
+    level > 0
+      ? supabase.from("global_events").select("starts, ends, title, category, regions, tier").lte("tier", level).lte("starts", to).order("tier")
+      : Promise.resolve({ data: [] as never[] }),
   ]);
+  // Shared sports and esports dates: only ones for this client's markets and chosen
+  // categories. They sit as one quiet line per day, never more than two.
+  const markets: string[] = client.markets ?? [];
+  const cats: string[] = client.event_categories ?? [];
+  const big = ((shared ?? []) as { starts: string; ends: string | null; title: string; category: string; regions: string[]; tier: number }[]).filter(
+    (e) =>
+      (e.ends ?? e.starts) >= from &&
+      (cats.length === 0 || cats.includes(e.category)) &&
+      (markets.length === 0 || e.regions.includes("Global") || e.regions.some((r) => markets.includes(r))),
+  );
+  const bigOn = (date: string) => big.filter((e) => e.starts <= date && (e.ends ?? e.starts) >= date);
   const items: Item[] = [
     ...(entries ?? []).map((e) => ({ date: e.date, cls: e.kind === "event" ? "ev event" : "ev", text: e.text, entryId: e.id })),
-    ...(posts ?? []).map((p) => ({ date: p.publish_date, cls: "ev", text: `${p.channels.join(", ")}: ${p.body} (${p.status})` })),
+    ...(posts ?? []).map((p) => ({
+      date: p.publish_date,
+      cls: p.status === "Client review" ? "ev req" : "ev",
+      text: `${p.channels.join(", ")}: ${p.body} (${p.status})`,
+      approve: p.status === "Client review",
+    })),
     ...(requests ?? []).map((r) => ({ date: r.for_date, cls: "ev req", text: `${r.kind}: ${r.details}` })),
   ];
 
@@ -63,6 +83,10 @@ export default async function Calendar({
             <i style={{ background: "var(--blue)" }} />
             Event
           </span>
+          <span>
+            <i style={{ background: "transparent", border: "1px solid var(--blue)" }} />
+            Sport and esports dates
+          </span>
         </div>
       </div>
       <div className="tw">
@@ -79,11 +103,29 @@ export default async function Calendar({
             return (
               <div key={i} className={`day${inMonth ? "" : " out"}${date === now ? " today" : ""}`}>
                 <div className="n">{inMonth ? n : ""}</div>
+                {inMonth
+                  ? bigOn(date)
+                      .slice(0, 2)
+                      .map((e) => (
+                        <div className="big" key={e.title} title={`${e.category}: ${e.title}`}>
+                          {e.title}
+                        </div>
+                      ))
+                  : null}
+                {inMonth && bigOn(date).length > 2 ? <div className="big more">and {bigOn(date).length - 2} more</div> : null}
                 {items
                   .filter((it) => inMonth && it.date === date)
                   .map((it, k) => (
                     <div className={it.cls} key={k}>
                       {it.text}
+                      {it.approve ? (
+                        <>
+                          {" "}
+                          <Link className="btn sm" href={`/c/${id}/posts`}>
+                            {isStaff ? "Open" : "Review"}
+                          </Link>
+                        </>
+                      ) : null}
                       {isStaff && it.entryId ? (
                         <form className="inline" action={deleteCalendarEntry.bind(null, id, it.entryId)}>
                           {" "}

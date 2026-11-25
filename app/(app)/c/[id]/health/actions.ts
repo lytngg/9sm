@@ -20,16 +20,6 @@ function weekOf(date: string) {
   return d.toISOString().slice(0, 10);
 }
 
-export async function saveNote(clientId: string, formData: FormData) {
-  await requireStaff();
-  const week = weekOf(str(formData, "week"));
-  const body = str(formData, "body");
-  if (!week || !body) back(clientId, "Write the note and pick the week it covers.");
-  const supabase = await createClient();
-  const { error } = await supabase.from("channel_notes").upsert({ client_id: clientId, week, body });
-  back(clientId, error ? "The note did not save." : undefined);
-}
-
 export async function logNumbers(clientId: string, formData: FormData) {
   await requireStaff();
   const week = weekOf(str(formData, "week"));

@@ -1,6 +1,5 @@
 import { CHANNELS, loadWorkspace, today } from "@/lib/workspace";
-import { Avatar } from "@/components/avatar";
-import { logNumbers, saveNote } from "./actions";
+import { logNumbers } from "./actions";
 
 type Stat = { channel: string; week: string; followers: number };
 
@@ -48,15 +47,11 @@ export default async function Health({
   const { id } = await params;
   const { error } = await searchParams;
   const { supabase, isStaff } = await loadWorkspace(id);
-  const [{ data: statRows }, { data: notes }, { data: network }, { data: smmRows }] = await Promise.all([
+  const [{ data: statRows }, { data: network }] = await Promise.all([
     supabase.from("channel_stats").select("channel, week, followers").eq("client_id", id).order("week"),
-    supabase.from("channel_notes").select("week, body").eq("client_id", id).order("week", { ascending: false }).limit(1),
     supabase.rpc("network_growth"),
-    supabase.rpc("client_smm", { p_client: id }),
   ]);
   const stats = (statRows ?? []) as Stat[];
-  const note = notes?.[0];
-  const smm = (smmRows as { full_name: string | null; photo_url: string | null }[] | null)?.[0];
   const medians = new Map(((network ?? []) as { channel: string; median_growth: number }[]).map((n) => [n.channel, Number(n.median_growth)]));
 
   const rows = CHANNELS.map((channel) => {
@@ -73,21 +68,11 @@ export default async function Health({
     <>
       {error ? <div className="msg">{error}</div> : null}
 
-      {note ? (
-        <div className="note">
-          <div className="smm" style={{ marginBottom: 12 }}>
-            <Avatar name={smm?.full_name ?? "9SM"} photoUrl={smm?.photo_url} size={40} />
-            <div className="mute small">
-              From {smm?.full_name ?? "your 9SM team"}, week of {note.week}
-            </div>
-          </div>
-          <p className="note-body">{note.body}</p>
-        </div>
-      ) : (
+      {rows.length === 0 ? (
         <p className="empty" style={{ borderTop: 0 }}>
-          {isStaff ? "No weekly note yet. Write the first one below." : "Your first weekly note from the team will appear here."}
+          {isStaff ? "No numbers yet. Log the first week below." : "Your channel numbers will appear here shortly."}
         </p>
-      )}
+      ) : null}
 
       {rows.length ? (
         <div className="strip">
@@ -116,23 +101,6 @@ export default async function Health({
 
       {isStaff ? (
         <div className="grid" style={{ marginTop: 36 }}>
-          <div className="card">
-            <h2>This week&apos;s note to the client</h2>
-            <form className="f" action={saveNote.bind(null, id)}>
-              <label>
-                Week
-                <input type="date" name="week" defaultValue={today()} required />
-              </label>
-              <label>
-                A few plain sentences: what is working, what is steady, what needs attention
-                <textarea name="body" required />
-              </label>
-              <div>
-                <button className="btn">Publish note</button>
-              </div>
-            </form>
-            <p className="mute small">The client reads this at the top of the page, next to your photo.</p>
-          </div>
           <div className="card">
             <h2>Log follower counts</h2>
             <form className="f" action={logNumbers.bind(null, id)}>

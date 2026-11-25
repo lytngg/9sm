@@ -6,6 +6,7 @@ import { requireProfile, requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { MARKETS, OPERATOR_TAGS, pick, str } from "@/lib/workspace";
 import { uploadClientFile } from "@/lib/files";
+import { EVENT_CATEGORIES } from "@/lib/scope";
 
 const FIELDS = [
   "website",
@@ -53,7 +54,13 @@ export async function saveHubStaff(clientId: string, formData: FormData) {
   const tags = pick(formData, "tags", OPERATOR_TAGS);
   const { error: e1 } = await supabase
     .from("clients")
-    .update({ tags, markets: pick(formData, "markets", MARKETS), type: tags.join(", ") })
+    .update({
+      tags,
+      markets: pick(formData, "markets", MARKETS),
+      type: tags.join(", "),
+      event_level: Math.min(3, Math.max(0, Number(str(formData, "event_level") || "1") || 0)),
+      event_categories: pick(formData, "event_categories", EVENT_CATEGORIES),
+    })
     .eq("id", clientId);
   const { error: e2 } = await supabase.from("client_profile").upsert({
     client_id: clientId,

@@ -2,6 +2,7 @@ import { loadWorkspace, MARKETS, OPERATOR_TAGS } from "@/lib/workspace";
 import { doneCount, onboardingSteps, type ClientProfile } from "@/lib/onboarding";
 import { signedUrls } from "@/lib/files";
 import { TagPicker } from "@/components/tags";
+import { EVENT_CATEGORIES, EVENT_LEVELS } from "@/lib/scope";
 import { saveHub, saveHubStaff } from "./actions";
 
 const STATE = { done: ["pill good", "Done"], client: ["pill pink", "With the client"], "9sm": ["pill purple", "With 9SM"] } as const;
@@ -193,6 +194,22 @@ export default async function Hub({
                   Markets
                 </div>
                 <TagPicker name="markets" options={MARKETS} selected={client.markets ?? []} />
+              </div>
+              <label>
+                Sport and esports dates on their calendar
+                <select name="event_level" defaultValue={String(client.event_level ?? 1)}>
+                  {EVENT_LEVELS.map((l, i) => (
+                    <option key={l} value={i}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div>
+                <div className="mute small" style={{ marginBottom: 4 }}>
+                  Only these sports. Leave empty for all.
+                </div>
+                <TagPicker name="event_categories" options={EVENT_CATEGORIES} selected={client.event_categories ?? []} />
               </div>
               <div className="row">
                 <label>

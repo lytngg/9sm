@@ -98,6 +98,10 @@ export async function setPostStage(clientId: string, postId: string, status: str
   const path = `/c/${clientId}/posts`;
   if (!(STAGES as readonly string[]).includes(status)) back(path);
   const supabase = await createClient();
+  if (status === "Posted") {
+    const { data: c } = await supabase.from("clients").select("*").eq("id", clientId).maybeSingle();
+    if (c?.paused_at) back(path, "Posting is paused for this client. Resume it on the Overview tab first.");
+  }
   const { error } = await supabase.from("posts").update({ status }).eq("id", postId).eq("client_id", clientId);
   back(path, error ? "Could not move that post." : undefined);
 }

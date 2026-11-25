@@ -33,6 +33,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <NavLink href="/talent" exact>
                 Talent
               </NavLink>
+              <NavLink href="/departments" exact>
+                Teams
+              </NavLink>
+              <NavLink href="/events" exact>
+                Events
+              </NavLink>
             </>
           ) : null}
           <div className="side-label">{isStaff ? "Clients" : "Your workspaces"}</div>
