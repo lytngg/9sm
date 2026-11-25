@@ -356,3 +356,14 @@ label.check input{width:auto;accent-color:var(--purple)}
 .progress{height:5px;border-radius:3px;background:var(--line);overflow:hidden;margin:8px 0 6px}
 .progress i{display:block;height:100%;background:var(--good)}
 .badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--pink);color:#fff;font-size:11px;font-weight:600;margin-left:auto}
+
+/* ---------- tasks by person ---------- */
+.pload{border-top:1px solid var(--line)}
+.pload:last-of-type{border-bottom:1px solid var(--line)}
+.pload > summary{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(0,4fr) auto;gap:14px;align-items:center;padding:14px 4px;cursor:pointer;list-style:none}
+.pload > summary::-webkit-details-marker{display:none}
+.pload > summary:hover{background:var(--surface)}
+.pload-nums{display:flex;gap:6px 22px;flex-wrap:wrap;font-size:13.5px}
+.pload-task{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1.4fr) 120px 110px;gap:14px;align-items:center;padding:9px 4px 9px 22px;border-top:1px solid var(--line-soft);text-decoration:none;color:inherit;font-size:14px}
+.pload-task:hover{background:var(--surface)}
+@media (max-width:760px){.pload > summary{grid-template-columns:1fr}.pload-task{grid-template-columns:1fr 1fr}}

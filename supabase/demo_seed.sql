@@ -274,6 +274,29 @@ begin
                                or (t.name <> 'New client onboarding' and t.format = b.format)
   cross join lateral unnest(t.items) with ordinality x(text, ord);
 
+  -- a spread of owners, so the by-person view has something to show
+  update public.briefs set assignee = (select id from public.profiles where email = 'erolinda.demo@example.com')
+    where team = 'design' and status = 'In progress' and title like 'Christmas%';
+  insert into public.briefs (client_id, team, title, due, status, assignee, requested_by)
+  select cl.id, 'social', v.title, current_date + v.due_in, v.status,
+         (select id from public.profiles where email = v.who || '.demo@example.com'), ish
+  from (values
+    ('Betya', 'Monthly report for October', -6, 'In progress', 'callum'),
+    ('Wombet', 'Reply to the client on the giveaway terms', -2, 'In progress', 'callum'),
+    ('MINT', 'December content plan', -1, 'In progress', 'callum'),
+    ('96.com', 'Sign off the tournament creative', 2, 'In review', 'ish'),
+    ('PUBS', 'Review the Christmas quiz copy', 3, 'In review', 'ish'),
+    ('B2', 'December content plan', 4, 'In progress', 'pat'),
+    ('FastRips', 'Weekly rip schedule', 1, 'In progress', 'pat'),
+    ('Go Go Gold', 'Black Friday recap thread', 2, 'In progress', 'pat'),
+    ('Luckycoin', 'Pinned post refresh', 5, 'Requested', 'pat'),
+    ('VictoryRush', 'New follower welcome reply', 6, 'Requested', 'pat'),
+    ('Kickback Casino', 'Competitor round-up', 8, 'Requested', 'pat'),
+    ('Oracle 7', 'Monthly report for November', 10, 'Requested', 'pat'),
+    ('Dara Casino', 'Brand voice notes for the new SMM', -1, 'In progress', 'pat')
+  ) v(client, title, due_in, status, who)
+  join public.clients cl on cl.name = v.client;
+
   insert into public.global_events (starts, ends, title, category, regions, tier) values
     (date '2026-12-25', null, 'NBA Christmas Day games', 'Basketball', '{US,Global}', 2),
     (date '2026-12-25', null, 'NFL Christmas Day games', 'American football', '{US}', 2),

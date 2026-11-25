@@ -1,6 +1,7 @@
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { TEAMS } from "@/lib/workspace";
+import Link from "next/link";
+import { TEAMS, today } from "@/lib/workspace";
 import { Avatar } from "@/components/avatar";
 
 type Person = { id: string; full_name: string | null; title: string | null; team: string | null; photo_url: string | null };
@@ -12,13 +13,18 @@ export default async function People() {
   const [{ data: staff }, { data: clients }, { data: briefs }] = await Promise.all([
     supabase.from("profiles").select("id, full_name, title, team, photo_url").eq("role", "staff").not("full_name", "is", null).order("full_name"),
     supabase.from("clients").select("name, smm_id").not("smm_id", "is", null).order("name"),
-    supabase.from("briefs").select("assignee").neq("status", "Delivered").not("assignee", "is", null),
+    supabase.from("briefs").select("assignee, due").neq("status", "Delivered").not("assignee", "is", null),
   ]);
   const people = (staff ?? []) as Person[];
   const owns = new Map<string, string[]>();
   (clients ?? []).forEach((c) => owns.set(c.smm_id, [...(owns.get(c.smm_id) ?? []), c.name]));
   const open = new Map<string, number>();
-  (briefs ?? []).forEach((b) => open.set(b.assignee, (open.get(b.assignee) ?? 0) + 1));
+  const late = new Map<string, number>();
+  const now = today();
+  (briefs ?? []).forEach((b) => {
+    open.set(b.assignee, (open.get(b.assignee) ?? 0) + 1);
+    if (b.due && b.due < now) late.set(b.assignee, (late.get(b.assignee) ?? 0) + 1);
+  });
   const groups = [...TEAMS, "Other"]
     .map((team) => ({ team, list: people.filter((p) => (TEAMS.includes(p.team ?? "") ? p.team : "Other") === team) }))
     .filter((g) => g.list.length);
@@ -47,7 +53,14 @@ export default async function People() {
                         {mine.length > 4 ? ` and ${mine.length - 4} more` : ""}
                       </div>
                     ) : null}
-                    {n ? <div className="small" style={{ marginTop: 6 }}>{n} open {n === 1 ? "task" : "tasks"}</div> : null}
+                    {n ? (
+                      <div className="small" style={{ marginTop: 6 }}>
+                        <Link href={`/briefs?who=${p.id}`}>
+                          {n} open {n === 1 ? "task" : "tasks"}
+                        </Link>
+                        {late.get(p.id) ? <span style={{ color: "var(--bad)", fontWeight: 600 }}>, {late.get(p.id)} late</span> : null}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               );

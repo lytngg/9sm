@@ -48,12 +48,32 @@ export default async function Tasks({
     progress.set(i.brief_id, [p[0] + (i.done ? 1 : 0), p[1] + 1]);
   });
 
-  const view = q.v === "table" || q.v === "calendar" ? q.v : "board";
+  const view = q.v === "table" || q.v === "calendar" || q.v === "people" ? q.v : "board";
   const team = TASK_TEAMS.some((t) => t.key === q.team) ? q.team : undefined;
-  const who = q.who === "mine" || q.who === "raised" ? q.who : undefined;
+  // who is "mine", "raised", "nobody", or one person's id.
+  const who = q.who === "mine" || q.who === "raised" || q.who === "nobody" || person.has(q.who ?? "") ? q.who : undefined;
   const shown = all.filter(
-    (b) => (!team || b.team === team) && (who === "mine" ? b.assignee === me.id : who === "raised" ? b.requested_by === me.id : true),
+    (b) =>
+      (!team || b.team === team) &&
+      (who === "mine" ? b.assignee === me.id : who === "raised" ? b.requested_by === me.id : who === "nobody" ? !b.assignee : who ? b.assignee === who : true),
   );
+  // Everyone's load, worst first: late, then due this week, then open.
+  const openTeam = all.filter((b) => b.status !== "Delivered" && (!team || b.team === team));
+  const perPerson = [...new Set(openTeam.map((b) => b.assignee ?? ""))]
+    .map((pid) => {
+      const mine = openTeam.filter((b) => (b.assignee ?? "") === pid);
+      return {
+        id: pid,
+        name: pid ? (person.get(pid) ?? "Someone") : "Nobody yet",
+        tasks: mine,
+        open: mine.length,
+        late: mine.filter((b) => b.due && b.due < now).length,
+        week: mine.filter((b) => b.due && b.due >= now && b.due <= weekEnd).length,
+        review: mine.filter((b) => b.status === "In review").length,
+        waiting: mine.filter((b) => b.status === "Requested").length,
+      };
+    })
+    .sort((a, b) => b.late - a.late || b.week - a.week || b.open - a.open);
   const href = (o: { v?: string; team?: string | null; who?: string | null; m?: string }) => {
     const p = new URLSearchParams();
     const vv = o.v ?? view;
@@ -225,6 +245,7 @@ export default async function Tasks({
             ["board", "Board"],
             ["table", "Table"],
             ["calendar", "Calendar"],
+            ["people", "By person"],
           ].map(([k, label]) => (
             <Link key={k} className={view === k ? "on" : undefined} href={href({ v: k })}>
               {label}
@@ -241,6 +262,8 @@ export default async function Tasks({
           <Link className={who === "raised" ? "filter on" : "filter"} href={href({ who: "raised" })}>
             Raised by me
           </Link>
+          {who && person.has(who) ? <span className="filter on">{person.get(who)}</span> : null}
+          {who === "nobody" ? <span className="filter on">Nobody yet</span> : null}
           <span style={{ width: 8 }} />
           <Link className={!team ? "filter on" : "filter"} href={href({ team: null })}>
             Every team
@@ -371,6 +394,40 @@ export default async function Tasks({
             </div>
           </section>
         </>
+      ) : null}
+
+      {view === "people" ? (
+        <div>
+          {perPerson.map((p) => (
+            <details key={p.id || "nobody"} className="pload" open={p.late > 0}>
+              <summary>
+                <b>{p.name}</b>
+                <span className="pload-nums">
+                  <span>{p.open} open</span>
+                  <span style={{ color: p.late ? "var(--bad)" : "var(--faint)", fontWeight: p.late ? 600 : 400 }}>{p.late} late</span>
+                  <span style={{ color: p.week ? "var(--warn)" : "var(--faint)" }}>{p.week} due in 7 days</span>
+                  <span style={{ color: p.review ? "var(--pink)" : "var(--faint)" }}>{p.review} in review</span>
+                  {p.id ? <span style={{ color: p.waiting ? undefined : "var(--faint)" }}>{p.waiting} not started</span> : null}
+                </span>
+                <Link className="btn ghost sm" href={href({ v: "board", who: p.id || "nobody" })}>
+                  Open their board
+                </Link>
+              </summary>
+              {p.tasks.map((b) => {
+                const late = b.due && b.due < now;
+                return (
+                  <Link key={b.id} href={`/briefs/${b.id}`} className="pload-task">
+                    <span>{b.title}</span>
+                    <span className="mute small">{b.client_id ? clientName.get(b.client_id) : "Internal"}</span>
+                    <span className={PILL[b.status] ?? "pill"}>{b.status}</span>
+                    <span style={{ color: late ? "var(--bad)" : "var(--mute)", whiteSpace: "nowrap" }}>{b.due ? `${late ? "Late, " : ""}${day(b.due)}` : "No date"}</span>
+                  </Link>
+                );
+              })}
+            </details>
+          ))}
+          {perPerson.length === 0 ? <p className="empty">No open tasks.</p> : null}
+        </div>
       ) : null}
 
       {view === "calendar" ? (
