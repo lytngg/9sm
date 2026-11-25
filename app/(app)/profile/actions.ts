@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { str } from "@/lib/workspace";
+import { str, TEAMS } from "@/lib/workspace";
 
 const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -34,6 +34,7 @@ export async function saveProfile(formData: FormData) {
     p_name: name,
     p_title: str(formData, "title"),
     p_photo: photoUrl,
+    p_team: TEAMS.includes(str(formData, "team")) ? str(formData, "team") : "",
   });
   if (error) fail("Your profile did not save.");
   revalidatePath("/", "layout");

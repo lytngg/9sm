@@ -23,9 +23,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <nav className="side-scroll">
           {isStaff ? (
-            <NavLink href="/clients" exact>
-              All clients
-            </NavLink>
+            <>
+              <NavLink href="/clients" exact>
+                All clients
+              </NavLink>
+              <NavLink href="/onboarding" exact>
+                Onboarding
+              </NavLink>
+              <NavLink href="/talent" exact>
+                Talent
+              </NavLink>
+            </>
           ) : null}
           <div className="side-label">{isStaff ? "Clients" : "Your workspaces"}</div>
           {(clients ?? []).map((c) => (

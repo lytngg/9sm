@@ -2,6 +2,7 @@ import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Avatar } from "@/components/avatar";
 import { saveProfile } from "./actions";
+import { TEAMS } from "@/lib/workspace";
 
 export default async function Profile({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
   const profile = await requireStaff();
@@ -9,7 +10,7 @@ export default async function Profile({ searchParams }: { searchParams: Promise<
   const supabase = await createClient();
   const { data: me } = await supabase
     .from("profiles")
-    .select("full_name, title, photo_url")
+    .select("*")
     .eq("id", profile.id)
     .maybeSingle();
   const name = me?.full_name ?? "";
@@ -38,6 +39,15 @@ export default async function Profile({ searchParams }: { searchParams: Promise<
             <label>
               Title
               <input type="text" name="title" defaultValue={me?.title ?? ""} placeholder="Social Media Manager" />
+            </label>
+            <label>
+              Team
+              <select name="team" defaultValue={me?.team ?? ""}>
+                <option value="">Not set</option>
+                {TEAMS.map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
             </label>
             <div>
               <button className="btn">Save profile</button>

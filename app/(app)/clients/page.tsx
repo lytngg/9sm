@@ -2,15 +2,16 @@ import Link from "next/link";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { addClient, addStaff } from "./actions";
+import { MARKETS, OPERATOR_TAGS } from "@/lib/workspace";
+import { TagPicker, Tags } from "@/components/tags";
 
-const TYPES = ["Crypto casino", "Sweeps", "Sportsbook", "Regulated casino", "Poker", "Prediction market", "Other"];
 
 export default async function Clients({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   await requireStaff();
   const { error } = await searchParams;
   const supabase = await createClient();
   const [{ data: clients }, { data: staff }, { data: staffInvites }] = await Promise.all([
-    supabase.from("clients").select("id, name, type, smm").order("name"),
+    supabase.from("clients").select("*").order("name"),
     supabase.from("profiles").select("email").eq("role", "staff").order("email"),
     supabase.from("invites").select("email").eq("role", "staff").order("email"),
   ]);
@@ -38,7 +39,7 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
                     <td>
                       <Link href={`/c/${c.id}`}>{c.name}</Link>
                     </td>
-                    <td>{c.type}</td>
+                    <td>{c.tags && c.tags.length ? <Tags items={c.tags} /> : c.type}</td>
                   </tr>
                 ))}
                 {!clients || clients.length === 0 ? (
@@ -59,14 +60,18 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
               Brand name
               <input type="text" name="name" required />
             </label>
-            <label>
-              Type
-              <select name="type">
-                {TYPES.map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
-              </select>
-            </label>
+            <div>
+              <div className="mute small" style={{ marginBottom: 4 }}>
+                What they are. Pick every one that applies.
+              </div>
+              <TagPicker name="tags" options={OPERATOR_TAGS} />
+            </div>
+            <div>
+              <div className="mute small" style={{ marginBottom: 4 }}>
+                Markets, if it matters for talent
+              </div>
+              <TagPicker name="markets" options={MARKETS} />
+            </div>
             <div>
               <button className="btn">Add client</button>
             </div>

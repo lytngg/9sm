@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireProfile, requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { CHANNELS, REQUEST_KINDS, STAGES, str } from "@/lib/workspace";
+import { CHANNELS, OFFER_KINDS, OFFER_PRODUCTS, REQUEST_KINDS, STAGES, str } from "@/lib/workspace";
+import { uploadClientFile } from "@/lib/files";
 
 // Every action re-checks the role here, and the database rules check again.
 function back(path: string, error?: string): never {
@@ -73,9 +74,22 @@ export async function addPost(clientId: string, formData: FormData) {
   if (!channels.length) back(path, "Pick at least one channel.");
   if (!body || !date || !time) back(path, "Write the post and set a date and time.");
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("posts")
-    .insert({ client_id: clientId, channels, publish_date: date, publish_time: time, body });
+  const upload = await uploadClientFile(supabase, clientId, "posts", formData.get("image"));
+  if (upload.error) back(path, upload.error);
+  const isOffer = formData.get("is_offer") === "on";
+  const product = str(formData, "offer_product");
+  const kind = str(formData, "offer_kind");
+  const { error } = await supabase.from("posts").insert({
+    client_id: clientId,
+    channels,
+    publish_date: date,
+    publish_time: time,
+    body,
+    image_path: upload.path,
+    is_offer: isOffer,
+    offer_product: isOffer && OFFER_PRODUCTS.includes(product) ? product : null,
+    offer_kind: isOffer && OFFER_KINDS.includes(kind) ? kind : null,
+  });
   back(path, error ? "Could not save that post." : undefined);
 }
 
@@ -105,4 +119,14 @@ export async function reviewPost(clientId: string, postId: string, approve: bool
     p_feedback: approve ? null : str(formData, "feedback"),
   });
   back(`/c/${clientId}/posts`, error ? "That post is no longer waiting for your review." : undefined);
+}
+
+export async function setLiveUrl(clientId: string, postId: string, formData: FormData) {
+  await requireStaff();
+  const path = `/c/${clientId}/posts`;
+  const url = str(formData, "live_url");
+  if (url && !/^https:\/\//.test(url)) back(path, "Paste the full link to the live post, starting with https://");
+  const supabase = await createClient();
+  const { error } = await supabase.from("posts").update({ live_url: url || null }).eq("id", postId).eq("client_id", clientId);
+  back(path, error ? "Could not save that link." : undefined);
 }

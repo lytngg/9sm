@@ -10,7 +10,9 @@ Stage 2: a calendar per client, operator requests, and posts with team lead and 
 
 Stage 3: staff profiles with a name, title and photo, and a social media manager assigned to each client. Operators see that person at the top of their workspace, without the email address.
 
-Next: talent (live tracking, hours, contracts, codes, outreach). Then the scheduler, inbox and attribution.
+Stage 4: operator type tags and markets, images and offer tags on posts with a link to the live post, private client files, an onboarding checklist that becomes the client hub, an onboarding board for staff, and a talent roster that shows each client the people who match their tags and takes their interest requests.
+
+Next: talent contracts, hours and codes. Then the scheduler, inbox and attribution.
 
 ## How it fits together
 
@@ -21,7 +23,7 @@ Next: talent (live tracking, hours, contracts, codes, outreach). Then the schedu
 
 ## Going live
 
-1. **Supabase.** Create a project. Open the SQL editor, paste all of `supabase/schema.sql` and run it. Then do the same with `supabase/002_calendar_requests_posts.sql` and `supabase/003_staff_profiles_smm.sql`, in that order. Each later stage adds one more numbered file to run.
+1. **Supabase.** Create a project. Open the SQL editor, paste all of `supabase/schema.sql` and run it. Then do the same with `supabase/002_calendar_requests_posts.sql` `supabase/003_staff_profiles_smm.sql` and `supabase/004_tags_offers_talent_onboarding.sql`, in that order. Each later stage adds one more numbered file to run.
 2. **Vercel.** Import this repository. Under Environment Variables add `NEXT_PUBLIC_SUPABASE_URL` (the project address) and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (the Publishable key, from Project Settings, API Keys). Never use a Secret key here. Deploy.
 3. **Supabase again.** Under Authentication, URL Configuration, set the Site URL to the Vercel address.
 4. **First staff account.** Open the site, create an account, then run this in the Supabase SQL editor with your email:

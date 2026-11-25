@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { MARKETS, OPERATOR_TAGS, pick } from "@/lib/workspace";
 
 export async function addClient(formData: FormData) {
   await requireStaff();
@@ -12,7 +13,9 @@ export async function addClient(formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.from("clients").insert({
     name,
-    type: String(formData.get("type") ?? ""),
+    tags: pick(formData, "tags", OPERATOR_TAGS),
+    markets: pick(formData, "markets", MARKETS),
+    type: pick(formData, "tags", OPERATOR_TAGS).join(", "),
   });
   if (error) {
     const message = error.code === "23505" ? "That client is already on the list." : "Could not add the client.";

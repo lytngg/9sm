@@ -1,5 +1,7 @@
-import { CHANNELS, loadWorkspace, STAGES, today } from "@/lib/workspace";
-import { addPost, deletePost, reviewPost, setPostStage } from "../workspace-actions";
+import { CHANNELS, loadWorkspace, OFFER_KINDS, OFFER_PRODUCTS, STAGES, today } from "@/lib/workspace";
+import { addPost, deletePost, reviewPost, setLiveUrl, setPostStage } from "../workspace-actions";
+import { signedUrls } from "@/lib/files";
+import { Tags } from "@/components/tags";
 
 const PILL: Record<string, string> = {
   Draft: "pill",
@@ -25,10 +27,12 @@ export default async function Posts({
   // Operators only get rows the database lets them see: client review and later.
   const { data: posts } = await supabase
     .from("posts")
-    .select("id, channels, publish_date, publish_time, body, status, feedback")
+    .select("*")
     .eq("client_id", id)
     .order("publish_date")
     .order("publish_time");
+
+  const images = await signedUrls(supabase, (posts ?? []).map((p) => p.image_path));
 
   const list = (
     <div className="card">
@@ -49,7 +53,24 @@ export default async function Posts({
                 </span>
                 <span className={PILL[p.status] ?? "pill"}>{p.status}</span>
               </div>
-              <p className="post-body">{p.body}</p>
+              <div className="post-main">
+                {p.image_path && images[p.image_path] ? (
+                  // A short-lived link to a private file, so the image optimiser is not used.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="creative" src={images[p.image_path]} alt="Creative for this post" />
+                ) : null}
+                <div>
+                  <p className="post-body">{p.body}</p>
+                  {p.is_offer ? <Tags items={["Offer", p.offer_product, p.offer_kind].filter(Boolean)} /> : null}
+                  {p.live_url ? (
+                    <p className="small" style={{ margin: "8px 0 0" }}>
+                      <a href={p.live_url} target="_blank" rel="noreferrer">
+                        View the live post
+                      </a>
+                    </p>
+                  ) : null}
+                </div>
+              </div>
               <div className={RAIL[stage] ?? "rail"} role="img" aria-label={`Stage ${stage + 1} of 5: ${p.status}`}>
                 {STAGES.map((s, i) => (
                   <i key={s} className={i <= stage ? "on" : undefined} />
@@ -71,6 +92,12 @@ export default async function Posts({
                   <form action={deletePost.bind(null, id, p.id)}>
                     <button className="btn ghost sm">Delete</button>
                   </form>
+                  {stage >= 3 ? (
+                    <form className="row" action={setLiveUrl.bind(null, id, p.id)} style={{ flex: 1, minWidth: 220 }}>
+                      <input type="url" name="live_url" defaultValue={p.live_url ?? ""} placeholder="Link to the live post" style={{ flex: 1 }} />
+                      <button className="btn ghost sm">Save link</button>
+                    </form>
+                  ) : null}
                 </div>
               ) : p.status === "Client review" ? (
                 <div className="row" style={{ alignItems: "flex-end" }}>
@@ -123,6 +150,36 @@ export default async function Posts({
                     {c}
                   </label>
                 ))}
+              </div>
+            </div>
+            <label>
+              Image
+              <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif" />
+            </label>
+            <div className="offerbox">
+              <label className="check">
+                <input type="checkbox" name="is_offer" />
+                This post is an offer
+              </label>
+              <div className="row">
+                <label>
+                  Product
+                  <select name="offer_product" defaultValue="">
+                    <option value="">Not set</option>
+                    {OFFER_PRODUCTS.map((o) => (
+                      <option key={o}>{o}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Kind of offer
+                  <select name="offer_kind" defaultValue="">
+                    <option value="">Not set</option>
+                    {OFFER_KINDS.map((o) => (
+                      <option key={o}>{o}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
             <div className="row">

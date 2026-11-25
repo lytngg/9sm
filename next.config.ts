@@ -4,8 +4,8 @@ const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
-  // Room for a 2 MB profile photo plus form overhead.
-  experimental: { serverActions: { bodySizeLimit: "3mb" } },
+  // Room for a 4 MB upload plus form overhead. Vercel refuses request bodies over 4.5 MB.
+  experimental: { serverActions: { bodySizeLimit: "4.4mb" } },
 };
 
 export default nextConfig;
