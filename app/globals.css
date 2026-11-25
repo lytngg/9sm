@@ -307,3 +307,5 @@ label.check input{width:auto;accent-color:var(--purple)}
 .filter:hover{color:var(--text);border-color:var(--faint)}
 .filter.on{color:var(--ink);background:var(--text);border-color:var(--text)}
 .filter.on span{color:#555}
+.mood{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:14px 0 8px;gap:2px}
+.mood i{display:block}

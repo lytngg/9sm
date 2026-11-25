@@ -7,7 +7,7 @@ type Item = { id: string; name: string };
 type Dept = { key: string; name: string };
 
 // The left rail. Everything a person can open lives here, so there is one
-// place to look. Inside a client workspace it lists that workspace's pages
+// place to look. Staff find a client through All clients, which has search. Inside a client workspace it lists that workspace's pages
 // and the plugins underneath.
 export function SideNav({ isStaff, clients, depts }: { isStaff: boolean; clients: Item[]; depts: Dept[] }) {
   const path = usePathname();
@@ -74,20 +74,14 @@ export function SideNav({ isStaff, clients, depts }: { isStaff: boolean; clients
       <NavLink href="/events" exact>
         Events
       </NavLink>
-      <div className="side-label">Clients</div>
-      {clients.map((c) =>
-        c.id === open ? (
+      {clients
+        .filter((c) => c.id === open)
+        .map((c) => (
           <div key={c.id} className="side-open">
             <div className="side-brand">{c.name}</div>
             {pages(c.id)}
           </div>
-        ) : (
-          <NavLink key={c.id} href={`/c/${c.id}`}>
-            {c.name}
-          </NavLink>
-        ),
-      )}
-      {clients.length === 0 ? <div className="side-label">None yet</div> : null}
+        ))}
     </nav>
   );
 }

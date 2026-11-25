@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { loadWorkspace } from "@/lib/workspace";
 import { PLUGINS } from "@/lib/plugins";
 import { Avatar } from "@/components/avatar";
+import { CommunityReport } from "@/components/community-report";
 import { askDepartment, setPlugin, setRequestStatus } from "../actions";
 
 const PILL: Record<string, string> = { New: "pill pink", "Picked up": "pill purple", Done: "pill good" };
@@ -27,6 +28,10 @@ export default async function Department({
   if (!dept) notFound();
   const info = PLUGINS[key];
   const active = (have ?? []).length > 0;
+  const { data: community } =
+    key === "community" && active
+      ? await supabase.from("channel_stats").select("channel, week, followers").eq("client_id", id).in("channel", ["Discord", "Telegram"]).order("week")
+      : { data: null };
   const requests = (rows ?? []) as Req[];
   const open = requests.filter((r) => r.status !== "Done");
   const done = requests.filter((r) => r.status === "Done");
@@ -83,6 +88,8 @@ export default async function Department({
           ) : null}
         </div>
       </div>
+
+      {community && community.length ? <CommunityReport clientId={id} stats={community} /> : null}
 
       {info?.market.length ? (
         <section className="plug-sec">
