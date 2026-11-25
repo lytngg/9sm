@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
@@ -13,6 +14,23 @@ type DB = Awaited<ReturnType<typeof createClient>>;
 function back(path: string, error?: string): never {
   revalidatePath("/briefs");
   redirect(error ? `${path}${path.includes("?") ? "&" : "?"}error=${encodeURIComponent(error)}` : path);
+}
+// Where to land after changing a task: back in the panel over the board if
+// that is where the person was, otherwise on the task's own page.
+async function here(id: string, closed = false) {
+  try {
+    const u = new URL((await headers()).get("referer") ?? "");
+    if (u.pathname === "/briefs") {
+      u.searchParams.delete("error");
+      if (closed) u.searchParams.delete("open");
+      else u.searchParams.set("open", id);
+      const qs = u.searchParams.toString();
+      return qs ? `/briefs?${qs}` : "/briefs";
+    }
+  } catch {
+    // no usable referer
+  }
+  return closed ? "/briefs" : `/briefs/${id}`;
 }
 const link = (v: string) => (v && /^https:\/\//.test(v) ? v : null);
 
@@ -82,20 +100,20 @@ export async function createBrief(formData: FormData) {
   await notify(supabase, me.id, assignee, `You were given "${title}"`, id);
   const { data: dept } = await supabase.from("departments").select("slack_member_id").eq("key", team).maybeSingle();
   await notifySlack(`New ${teamName(team)} task: ${title}`, dept?.slack_member_id);
-  back(`/briefs/${id}`);
+  back(await here(id));
 }
 
 // Every move a task makes is written into its thread, so the history is in one place.
 async function move(id: string, patch: Record<string, unknown>, event: string, kind: "event" | "changes" = "event", stay = false) {
   const supabase = await createClient();
   const { error } = await supabase.from("briefs").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
-  if (error) back(`/briefs/${id}`, "Could not update that task.");
+  if (error) back(await here(id), "Could not update that task.");
   await supabase.from("brief_notes").insert({ brief_id: id, body: event, kind });
   if (stay) {
     revalidatePath("/briefs");
     return supabase;
   }
-  back(`/briefs/${id}`);
+  back(await here(id));
 }
 
 export async function takeBrief(id: string) {
@@ -103,11 +121,37 @@ export async function takeBrief(id: string) {
   await move(id, { assignee: me.id, status: "In progress" }, "Picked this up.");
 }
 
-// Dragging a card on the board.
-export async function setTaskStatus(id: string, status: string) {
-  await requireStaff();
-  if (!(BRIEF_STAGES as readonly string[]).includes(status)) return;
-  await move(id, { status }, `Moved to ${status}.`, "event", true);
+// Dragging a card on the board. The board can be grouped by status, person or team,
+// so a drop changes whichever of those the columns stand for.
+export async function setTaskProp(id: string, by: string, value: string) {
+  const me = await requireStaff();
+  if (by === "status" && (BRIEF_STAGES as readonly string[]).includes(value)) {
+    await move(id, { status: value }, `Moved to ${value}.`, "event", true);
+  } else if (by === "team" && TASK_TEAMS.some((t) => t.key === value)) {
+    await move(id, { team: value }, `Moved to the ${teamName(value)} team.`, "event", true);
+  } else if (by === "person") {
+    const supabase = await createClient();
+    const { data: who } = value ? await supabase.from("profiles").select("id, full_name").eq("id", value).eq("role", "staff").maybeSingle() : { data: null };
+    if (value && !who) return;
+    const { data: task } = await supabase.from("briefs").select("title").eq("id", id).maybeSingle();
+    await move(id, { assignee: who?.id ?? null }, who ? `Given to ${who.full_name ?? "someone"}.` : "Unassigned.", "event", true);
+    await notify(supabase, me.id, who?.id, `You were given "${task?.title ?? "a task"}"`, id);
+  }
+}
+
+// The "New" row at the bottom of a column: a title is enough, the column fills in the rest.
+export async function quickAdd(by: string, value: string, team: string, formData: FormData) {
+  const me = await requireStaff();
+  const title = str(formData, "title");
+  if (!title) return;
+  const supabase = await createClient();
+  const row: Record<string, unknown> = { title, team: TASK_TEAMS.some((t) => t.key === team) ? team : "social", status: "Requested" };
+  if (by === "status" && (BRIEF_STAGES as readonly string[]).includes(value)) row.status = value;
+  if (by === "team" && TASK_TEAMS.some((t) => t.key === value)) row.team = value;
+  if (by === "person" && value) row.assignee = value;
+  const { data } = await supabase.from("briefs").insert(row).select("id").single();
+  if (data && row.assignee) await notify(supabase, me.id, String(row.assignee), `You were given "${title}"`, data.id);
+  revalidatePath("/briefs");
 }
 
 export async function saveTask(id: string, formData: FormData) {
@@ -116,7 +160,7 @@ export async function saveTask(id: string, formData: FormData) {
   const team = str(formData, "team");
   const status = str(formData, "status");
   if (!title || !TASK_TEAMS.some((t) => t.key === team) || !(BRIEF_STAGES as readonly string[]).includes(status)) {
-    back(`/briefs/${id}`, "A task needs a title, a team and a status.");
+    back(await here(id), "A task needs a title, a team and a status.");
   }
   const supabase = await createClient();
   const { data: before } = await supabase.from("briefs").select("assignee, status").eq("id", id).maybeSingle();
@@ -138,10 +182,10 @@ export async function saveTask(id: string, formData: FormData) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
-  if (error) back(`/briefs/${id}`, "Could not save that.");
+  if (error) back(await here(id), "Could not save that.");
   if (before && before.assignee !== assignee) await notify(supabase, me.id, assignee, `You were given "${title}"`, id);
   if (before && before.status !== status) await supabase.from("brief_notes").insert({ brief_id: id, body: `Moved to ${status}.`, kind: "event" });
-  back(`/briefs/${id}`);
+  back(await here(id));
 }
 
 export async function sendForReview(id: string, formData: FormData) {
@@ -151,8 +195,8 @@ export async function sendForReview(id: string, formData: FormData) {
   if (!brief) back("/briefs", "That task could not be found.");
   const url = link(str(formData, "delivery_url"));
   const upload = await uploadClientFile(supabase, brief!.client_id ?? "internal", "briefs", formData.get("file"), true);
-  if (upload.error) back(`/briefs/${id}`, upload.error);
-  if (!url && !upload.path) back(`/briefs/${id}`, "Add a link to the work or upload the file.");
+  if (upload.error) back(await here(id), upload.error);
+  if (!url && !upload.path) back(await here(id), "Add a link to the work or upload the file.");
   const patch: Record<string, unknown> = { status: "In review" };
   if (url) patch.delivery_url = url;
   if (upload.path) patch.delivery_path = upload.path;
@@ -171,7 +215,7 @@ export async function approveBrief(id: string) {
 export async function askForChanges(id: string, formData: FormData) {
   const me = await requireStaff();
   const note = str(formData, "note");
-  if (!note) back(`/briefs/${id}`, "Say what should change.");
+  if (!note) back(await here(id), "Say what should change.");
   const supabase = await createClient();
   const { data: brief } = await supabase.from("briefs").select("title, assignee").eq("id", id).maybeSingle();
   await notify(supabase, me.id, brief?.assignee, `Changes asked on "${brief?.title}"`, id);
@@ -186,44 +230,44 @@ export async function reopenBrief(id: string) {
 export async function addNote(id: string, formData: FormData) {
   const me = await requireStaff();
   const body = str(formData, "body");
-  if (!body) back(`/briefs/${id}`);
+  if (!body) back(await here(id));
   const supabase = await createClient();
   const { error } = await supabase.from("brief_notes").insert({ brief_id: id, body });
   if (!error) {
     const { data: brief } = await supabase.from("briefs").select("title").eq("id", id).maybeSingle();
     await mentions(supabase, me.id, body, brief?.title ?? "a task", id);
   }
-  back(`/briefs/${id}`, error ? "That note did not save." : undefined);
+  back(await here(id), error ? "That note did not save." : undefined);
 }
 
 export async function deleteTask(id: string) {
   await requireStaff();
   const supabase = await createClient();
   const { error } = await supabase.from("briefs").delete().eq("id", id);
-  back(error ? `/briefs/${id}` : "/briefs", error ? "Could not delete that task." : undefined);
+  back(await here(id, !error), error ? "Could not delete that task." : undefined);
 }
 
 // ---------- checklist ----------
 export async function addItem(id: string, formData: FormData) {
   await requireStaff();
   const text = str(formData, "text");
-  if (!text) back(`/briefs/${id}`);
+  if (!text) back(await here(id));
   const supabase = await createClient();
   const { count } = await supabase.from("brief_items").select("id", { count: "exact", head: true }).eq("brief_id", id);
   await supabase.from("brief_items").insert({ brief_id: id, text, position: count ?? 0 });
-  back(`/briefs/${id}`);
+  back(await here(id));
 }
 export async function toggleItem(id: string, itemId: string, done: boolean) {
   await requireStaff();
   const supabase = await createClient();
   await supabase.from("brief_items").update({ done }).eq("id", itemId).eq("brief_id", id);
-  back(`/briefs/${id}`);
+  back(await here(id));
 }
 export async function removeItem(id: string, itemId: string) {
   await requireStaff();
   const supabase = await createClient();
   await supabase.from("brief_items").delete().eq("id", itemId).eq("brief_id", id);
-  back(`/briefs/${id}`);
+  back(await here(id));
 }
 
 // ---------- custom fields ----------

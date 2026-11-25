@@ -2,67 +2,126 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 
 export type BoardTask = {
-  id: string; title: string; client: string | null; team: string; teamName: string; due: string | null; dueLabel: string | null;
-  late: boolean; urgent: boolean; status: string; who: string; done: number; total: number;
+  id: string; title: string; group: string; client: string | null; teamKey: string; teamName: string; status: string;
+  dueLabel: string | null; late: boolean; urgent: boolean; owner: string | null; done: number; total: number; closed: boolean;
 };
+export type BoardGroup = { key: string; label: string; tone: string };
 
-// The board. Cards can be dragged between columns, or opened and changed there.
-export function TaskBoard({ stages, tasks, move }: { stages: string[]; tasks: BoardTask[]; move: (id: string, status: string) => Promise<void> }) {
+const initials = (name: string) => name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
+
+// The board. Columns are whatever the tasks are grouped by. Drag a card to
+// another column to change it, click a card to open it beside the board, or
+// type in the New row at the bottom of a column to add one.
+export function TaskBoard({
+  by, groups, tasks, query, team, move, add,
+}: {
+  by: string;
+  groups: BoardGroup[];
+  tasks: BoardTask[];
+  query: string;
+  team: string;
+  move: (id: string, by: string, value: string) => Promise<void>;
+  add: (by: string, value: string, team: string, formData: FormData) => Promise<void>;
+}) {
   const router = useRouter();
   const [local, setLocal] = useState<Record<string, string>>({});
   const [over, setOver] = useState<string | null>(null);
+  const [adding, setAdding] = useState<string | null>(null);
   const [, start] = useTransition();
-  const statusOf = (t: BoardTask) => local[t.id] ?? t.status;
-  const drop = (stage: string, id: string) => {
+  const forms = useRef<Record<string, HTMLFormElement | null>>({});
+  const groupOf = (t: BoardTask) => local[t.id] ?? t.group;
+  const open = (id: string) => `/briefs?${query ? `${query}&` : ""}open=${id}`;
+  const drop = (key: string, id: string) => {
     setOver(null);
     const task = tasks.find((t) => t.id === id);
-    if (!task || statusOf(task) === stage) return;
-    setLocal((l) => ({ ...l, [id]: stage }));
+    if (!task || groupOf(task) === key) return;
+    setLocal((l) => ({ ...l, [id]: key }));
     start(async () => {
-      await move(id, stage);
+      await move(id, by, key);
       router.refresh();
     });
   };
   return (
-    <div className="board">
-      {stages.map((stage) => {
-        const items = tasks.filter((t) => statusOf(t) === stage);
+    <div className="nboard">
+      {groups.map((g) => {
+        const items = tasks.filter((t) => groupOf(t) === g.key);
         return (
           <div
-            key={stage}
-            className={over === stage ? "board-col over" : "board-col"}
+            key={g.key || "none"}
+            className={over === g.key ? "ncol over" : "ncol"}
             onDragOver={(e) => {
               e.preventDefault();
-              setOver(stage);
+              setOver(g.key);
             }}
-            onDragLeave={() => setOver((o) => (o === stage ? null : o))}
-            onDrop={(e) => drop(stage, e.dataTransfer.getData("text/plain"))}
+            onDragLeave={() => setOver((o) => (o === g.key ? null : o))}
+            onDrop={(e) => drop(g.key, e.dataTransfer.getData("text/plain"))}
           >
-            <div className="board-head">
-              {stage} <span>{items.length}</span>
+            <div className="ncol-head">
+              <span className={`ntag tone-${g.tone}`}>
+                <i />
+                {g.label}
+              </span>
+              <span className="ncount">{items.length}</span>
+              <button type="button" className="nplus" aria-label={`Add a task to ${g.label}`} onClick={() => setAdding(g.key)}>
+                +
+              </button>
             </div>
             {items.map((t) => (
               <Link
                 key={t.id}
-                href={`/briefs/${t.id}`}
+                href={open(t.id)}
+                scroll={false}
                 draggable
                 onDragStart={(e) => e.dataTransfer.setData("text/plain", t.id)}
-                className={t.urgent && stage !== "Delivered" ? "brief urgent" : "brief"}
+                className={t.urgent && !t.closed ? "ncard urgent" : "ncard"}
               >
                 <b>{t.title}</b>
-                {t.client ? <span className="mute small">{t.client}</span> : null}
-                <span className="brief-meta">
-                  <span className={`teamtag t-${t.team}`}>{t.teamName}</span>
-                  {t.dueLabel ? <span style={{ color: t.late && stage !== "Delivered" ? "var(--bad)" : undefined }}>{t.late && stage !== "Delivered" ? "Late, " : ""}{t.dueLabel}</span> : null}
-                  {t.total ? <span className="mute">{t.done}/{t.total} done</span> : null}
-                  <span className="mute">{t.who}</span>
-                </span>
+                {t.client ? <span className="nprop">{t.client}</span> : null}
+                {by !== "status" ? <span className={`ntag sm tone-${t.status === "Delivered" ? "good" : t.status === "In review" ? "pink" : t.status === "In progress" ? "purple" : "grey"}`}><i />{t.status}</span> : null}
+                {by !== "team" ? <span className={`teamtag t-${t.teamKey}`}>{t.teamName}</span> : null}
+                {t.dueLabel ? (
+                  <span className="nprop" style={{ color: t.late && !t.closed ? "var(--bad)" : undefined }}>
+                    {t.late && !t.closed ? "Late, " : ""}
+                    {t.dueLabel}
+                  </span>
+                ) : null}
+                {t.total ? (
+                  <span className="nprop">
+                    {t.done} of {t.total} steps
+                  </span>
+                ) : null}
+                {by !== "person" && t.owner ? (
+                  <span className="nowner">
+                    <i>{initials(t.owner)}</i>
+                    {t.owner}
+                  </span>
+                ) : null}
               </Link>
             ))}
-            {items.length === 0 ? <p className="mute small" style={{ padding: "6px 2px" }}>Drop a task here.</p> : null}
+            {adding === g.key ? (
+              <form
+                ref={(el) => {
+                  forms.current[g.key] = el;
+                }}
+                className="nadd-form"
+                action={(fd) => {
+                  setAdding(null);
+                  start(async () => {
+                    await add(by, g.key, team, fd);
+                    router.refresh();
+                  });
+                }}
+              >
+                <input name="title" placeholder="Type a name and press Enter" autoFocus required onBlur={(e) => { if (!e.currentTarget.value) setAdding(null); }} />
+              </form>
+            ) : (
+              <button type="button" className="nadd" onClick={() => setAdding(g.key)}>
+                + New
+              </button>
+            )}
           </div>
         );
       })}

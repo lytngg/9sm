@@ -3,8 +3,9 @@ import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { BRIEF_STAGES, TASK_TEAMS, teamName, today } from "@/lib/workspace";
 import { PLUGINS } from "@/lib/plugins";
-import { TaskBoard, type BoardTask } from "@/components/task-board";
-import { addField, createBrief, removeField, setTaskStatus } from "./actions";
+import { TaskBoard, type BoardGroup, type BoardTask } from "@/components/task-board";
+import { TaskDetail } from "@/components/task-detail";
+import { addField, createBrief, quickAdd, removeField, setTaskProp } from "./actions";
 
 type Task = {
   id: string; client_id: string | null; team: string; title: string; format: string | null; due: string | null; urgent: boolean;
@@ -18,7 +19,7 @@ const PILL: Record<string, string> = { Requested: "pill", "In progress": "pill p
 export default async function Tasks({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; v?: string; team?: string; who?: string; m?: string; client?: string; title?: string; details?: string; due?: string; template?: string }>;
+  searchParams: Promise<{ error?: string; open?: string; g?: string; v?: string; team?: string; who?: string; m?: string; client?: string; title?: string; details?: string; due?: string; template?: string }>;
 }) {
   const me = await requireStaff();
   const q = await searchParams;
@@ -74,10 +75,13 @@ export default async function Tasks({
       };
     })
     .sort((a, b) => b.late - a.late || b.week - a.week || b.open - a.open);
-  const href = (o: { v?: string; team?: string | null; who?: string | null; m?: string }) => {
+  const by = q.g === "person" || q.g === "team" ? q.g : "status";
+  const href = (o: { v?: string; team?: string | null; who?: string | null; m?: string; g?: string }) => {
     const p = new URLSearchParams();
     const vv = o.v ?? view;
     if (vv !== "board") p.set("v", vv);
+    const gg = o.g ?? by;
+    if (gg !== "status" && vv === "board") p.set("g", gg);
     const tt = o.team === null ? undefined : (o.team ?? team);
     const ww = o.who === null ? undefined : (o.who ?? who);
     if (tt) p.set("team", tt);
@@ -100,23 +104,37 @@ export default async function Tasks({
   const formats = [...new Set([...(PLUGINS.design.formats ?? []), ...(PLUGINS.video.formats ?? [])])];
   const prefill = Boolean(q.client || q.title || template);
 
-  const boardTasks: BoardTask[] = shown
-    .filter((b) => b.status !== "Delivered" || b.updated_at > recentCut)
-    .map((b) => ({
-      id: b.id,
-      title: b.title,
-      client: b.client_id ? (clientName.get(b.client_id) ?? null) : null,
-      team: b.team,
-      teamName: teamName(b.team),
-      due: b.due,
-      dueLabel: b.due ? day(b.due) : null,
-      late: Boolean(b.due && b.due < now),
-      urgent: b.urgent,
-      status: b.status,
-      who: `${first(b.requested_by) ?? "Someone"}${b.assignee ? ` to ${first(b.assignee)}` : ""}`,
-      done: progress.get(b.id)?.[0] ?? 0,
-      total: progress.get(b.id)?.[1] ?? 0,
-    }));
+  const onBoard = shown.filter((t) => t.status !== "Delivered" || (by === "status" && t.updated_at > recentCut));
+  const boardTasks: BoardTask[] = onBoard.map((t) => ({
+    id: t.id,
+    title: t.title,
+    group: by === "status" ? t.status : by === "team" ? t.team : (t.assignee && person.has(t.assignee) ? t.assignee : ""),
+    client: t.client_id ? (clientName.get(t.client_id) ?? null) : null,
+    teamKey: t.team,
+    teamName: teamName(t.team),
+    status: t.status,
+    dueLabel: t.due ? day(t.due) : null,
+    late: Boolean(t.due && t.due < now),
+    urgent: t.urgent,
+    owner: t.assignee ? (person.get(t.assignee) ?? null) : null,
+    done: progress.get(t.id)?.[0] ?? 0,
+    total: progress.get(t.id)?.[1] ?? 0,
+    closed: t.status === "Delivered",
+  }));
+  const TONES: Record<string, string> = { Requested: "grey", "In progress": "purple", "In review": "pink", Delivered: "good" };
+  const groups: BoardGroup[] =
+    by === "status"
+      ? BRIEF_STAGES.map((st) => ({ key: st, label: st, tone: TONES[st] }))
+      : by === "team"
+        ? TASK_TEAMS.filter((t) => boardTasks.some((b) => b.group === t.key) || ["social", "design", "video"].includes(t.key)).map((t) => ({ key: t.key, label: t.name, tone: "grey" }))
+        : [
+            { key: "", label: "Nobody yet", tone: "grey" },
+            ...[...new Set(boardTasks.map((b) => b.group).filter(Boolean))]
+              .map((pid) => ({ key: pid, label: person.get(pid) ?? "Someone", tone: boardTasks.some((b) => b.group === pid && b.late) ? "bad" : "purple" }))
+              .sort((x, y) => x.label.localeCompare(y.label)),
+          ];
+  const boardQuery = href({}).split("?")[1] ?? "";
+  const openId = /^[0-9a-f-]{36}$/.test(q.open ?? "") ? (q.open as string) : undefined;
 
   // Calendar view
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(q.m ?? "") ? (q.m as string) : now.slice(0, 7);
@@ -129,24 +147,61 @@ export default async function Tasks({
   return (
     <>
       <h1>Tasks</h1>
-      <p className="sub">Every piece of work between the teams. Raise it, see who has it, sign it off.</p>
-      {q.error ? <div className="msg">{q.error}</div> : null}
+      {q.error && !openId ? <div className="msg">{q.error}</div> : null}
 
-      <div className="tiles" style={{ marginTop: 18 }}>
-        {load.map((d) => (
-          <Link key={d.key} className="tile" href={href({ team: d.key })} style={{ textDecoration: "none", color: "inherit" }}>
-            <span>{d.name}</span>
-            <b>{d.open}</b>
-            <em className="mute">
-              {d.waiting} not picked up, {d.week} due in 7 days
-              {d.late ? <span style={{ color: "var(--bad)" }}>, {d.late} late</span> : null}
-            </em>
+      <div className="ntabs">
+          {[
+            ["board", "Board"],
+            ["table", "Table"],
+            ["calendar", "Calendar"],
+            ["people", "By person"],
+          ].map(([k, label]) => (
+            <Link key={k} className={view === k ? "on" : undefined} href={href({ v: k })}>
+              {label}
+            </Link>
+          ))}
+      </div>
+      <div className="nbar">
+        {view === "board" ? (
+          <span className="ngroup">
+            Group by
+            {[
+              ["status", "Status"],
+              ["person", "Person"],
+              ["team", "Team"],
+            ].map(([k, label]) => (
+              <Link key={k} className={by === k ? "on" : undefined} href={href({ g: k })}>
+                {label}
+              </Link>
+            ))}
+          </span>
+        ) : null}
+        <div className="filters" style={{ margin: 0 }}>
+          <Link className={!who ? "filter on" : "filter"} href={href({ who: null })}>
+            Everyone
           </Link>
-        ))}
+          <Link className={who === "mine" ? "filter on" : "filter"} href={href({ who: "mine" })}>
+            Assigned to me
+          </Link>
+          <Link className={who === "raised" ? "filter on" : "filter"} href={href({ who: "raised" })}>
+            Raised by me
+          </Link>
+          {who && person.has(who) ? <span className="filter on">{person.get(who)}</span> : null}
+          {who === "nobody" ? <span className="filter on">Nobody yet</span> : null}
+          <span style={{ width: 8 }} />
+          <Link className={!team ? "filter on" : "filter"} href={href({ team: null })}>
+            Every team
+          </Link>
+          {usedTeams.map((d) => (
+            <Link key={d.key} className={team === d.key ? "filter on" : "filter"} href={href({ team: d.key })}>
+              {d.name}
+            </Link>
+          ))}
+        </div>
       </div>
 
       <details className="newbrief" open={prefill}>
-        <summary className="btn">New task</summary>
+        <summary className="btn ghost sm">New task with details or a template</summary>
         <div className="card" style={{ marginTop: 14, maxWidth: 720 }}>
           <div className="row" style={{ marginBottom: 12, gap: 8 }}>
             <span className="mute small">Start from a template</span>
@@ -239,44 +294,18 @@ export default async function Tasks({
         </div>
       </details>
 
-      <div className="viewbar">
-        <div className="views">
-          {[
-            ["board", "Board"],
-            ["table", "Table"],
-            ["calendar", "Calendar"],
-            ["people", "By person"],
-          ].map(([k, label]) => (
-            <Link key={k} className={view === k ? "on" : undefined} href={href({ v: k })}>
-              {label}
-            </Link>
-          ))}
-        </div>
-        <div className="filters" style={{ margin: 0 }}>
-          <Link className={!who ? "filter on" : "filter"} href={href({ who: null })}>
-            Everyone
-          </Link>
-          <Link className={who === "mine" ? "filter on" : "filter"} href={href({ who: "mine" })}>
-            Assigned to me
-          </Link>
-          <Link className={who === "raised" ? "filter on" : "filter"} href={href({ who: "raised" })}>
-            Raised by me
-          </Link>
-          {who && person.has(who) ? <span className="filter on">{person.get(who)}</span> : null}
-          {who === "nobody" ? <span className="filter on">Nobody yet</span> : null}
-          <span style={{ width: 8 }} />
-          <Link className={!team ? "filter on" : "filter"} href={href({ team: null })}>
-            Every team
-          </Link>
-          {usedTeams.map((d) => (
-            <Link key={d.key} className={team === d.key ? "filter on" : "filter"} href={href({ team: d.key })}>
-              {d.name}
-            </Link>
-          ))}
-        </div>
-      </div>
+      {view === "board" ? (
+        <TaskBoard by={by} groups={groups} tasks={boardTasks} query={boardQuery} team={team ?? "social"} move={setTaskProp} add={quickAdd} />
+      ) : null}
 
-      {view === "board" ? <TaskBoard stages={[...BRIEF_STAGES]} tasks={boardTasks} move={setTaskStatus} /> : null}
+      {openId ? (
+        <>
+          <Link className="peek-shade" href={href({})} scroll={false} aria-label="Close the task" />
+          <aside className="peek">
+            <TaskDetail id={openId} meId={me.id} error={q.error} closeHref={href({})} />
+          </aside>
+        </>
+      ) : null}
 
       {view === "table" ? (
         <>
@@ -398,6 +427,20 @@ export default async function Tasks({
 
       {view === "people" ? (
         <div>
+      <div className="tiles" style={{ margin: "0 0 22px" }}>
+        {load.map((d) => (
+          <Link key={d.key} className="tile" href={href({ team: d.key })} style={{ textDecoration: "none", color: "inherit" }}>
+            <span>{d.name}</span>
+            <b>{d.open}</b>
+            <em className="mute">
+              {d.waiting} not picked up, {d.week} due in 7 days
+              {d.late ? <span style={{ color: "var(--bad)" }}>, {d.late} late</span> : null}
+            </em>
+          </Link>
+        ))}
+      </div>
+
+
           {perPerson.map((p) => (
             <details key={p.id || "nobody"} className="pload" open={p.late > 0}>
               <summary>
