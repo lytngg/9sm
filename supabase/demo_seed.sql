@@ -1,7 +1,6 @@
 -- DEMO DATA ONLY. Every number, price, post and person's detail here is made up
 -- so the screens have something to show. SirBetalot is a real brand name used
 -- as the example; nothing below is its real data. Remove all of it with:
---   delete from public.clients where type = 'demo';
 --   delete from public.channel_stats where client_id in (select id from public.clients where type = 'real');
 --   delete from public.client_profile where client_id in (select id from public.clients where type = 'real');
 --   delete from public.talent where bio like 'Demo profile.%';
@@ -36,7 +35,7 @@ begin
 
   select id into c from public.clients where name in ('Test Casino (demo)', 'Lucky Harbor (demo)', 'SirBetalot') limit 1;
   if c is null then insert into public.clients (name) values ('SirBetalot') returning id into c; end if;
-  update public.clients set name = 'SirBetalot', type = 'demo', tags = '{"Crypto casino"}', markets = '{}',
+  update public.clients set name = 'SirBetalot', type = 'real', tags = '{"Crypto casino"}', markets = '{}',
     smm_id = callum, event_level = 1 where id = c;
   delete from public.clients where id <> c and (name like '%(demo)' or type = 'demo');
 
@@ -174,53 +173,7 @@ begin
     ('Telegram',  array[2500,2540,2610,2590,2680,2740,2720,2700,2690,2710])
   ) v(ch, vals) cross join generate_series(0, 9) g(i);
 
-  -- twenty-three invented brands to bring the book up to fifty
   perform setseed(0.42);
-  for i in 1..20 loop
-    for k in 1..5 loop
-      continue when (i * 7 + k * 3) % 20 = 0;
-      n := n + 1;
-      exit when n > 23;
-      insert into public.clients (name, type, tags, markets, smm_id, created_at)
-      values (pre[i] || case when suf[k] = 'Bet' then 'Bet' else ' ' || suf[k] end, 'demo',
-              case suf[k] when 'Bet' then (case when i % 3 = 0 then '{Sportsbook,Predictions}' else '{Sportsbook}' end)::text[]
-                          when 'Casino' then (case when i % 2 = 0 then '{"Hybrid casino"}' else '{"Crypto casino"}' end)::text[]
-                          when 'Spins' then '{"Crypto casino"}'::text[]
-                          when 'Sweeps' then '{"Sweepstakes casino"}'::text[]
-                          else (case when i % 2 = 0 then '{"Card rips"}' else '{"Loot boxes","Card rips"}' end)::text[] end,
-              case when suf[k] in ('Sweeps', 'Rips') then '{US}'::text[] when i % 4 = 0 then '{UK,Europe}'::text[]
-                   when i % 4 = 1 then '{Europe,LatAm}'::text[] when i % 4 = 2 then '{US,Canada}'::text[] else '{Europe}'::text[] end,
-              case when suf[k] in ('Sweeps', 'Rips') or i % 4 = 2 then pat when n % 9 = 0 then ish else callum end,
-              now() - (case when n % 11 = 0 then (n % 5 + 2) else 40 + n * 4 end) * interval '1 day')
-      on conflict (name) do nothing returning id into nc;
-      continue when nc is null;
-      -- most are live; every eleventh is still being onboarded, at different stages
-      insert into public.client_profile (client_id, website, handles, brand_guidelines_url, contact_name, approver_name,
-                                         meeting_slot, design_signed_off, access_confirmed, go_live_date)
-      values (nc,
-              case when n % 11 <> 0 or n % 2 = 0 then 'https://example.com' end,
-              case when n % 11 <> 0 or n % 3 <> 0 then 'X, Instagram' end,
-              case when n % 11 <> 0 or n % 4 <> 0 then 'https://example.com/brand' end,
-              case when n % 11 <> 0 or n % 2 = 1 then 'Demo contact' end,
-              case when n % 11 <> 0 or n % 2 = 1 then 'Demo contact' end,
-              case when n % 11 <> 0 then 'Weekly' end,
-              n % 11 <> 0, n % 11 <> 0 or n % 22 = 0,
-              case when n % 11 = 0 then current_date + (n % 9 + 2) end);
-      foreach ch in array array['X', 'Instagram', 'TikTok', 'Discord', 'Telegram', 'YouTube'] loop
-        continue when (ch = 'YouTube' and n % 3 <> 0) or (ch in ('Discord', 'Telegram') and n % 4 = 1);
-        base := (1500 + random() * 26000)::int;
-        g := (random() - 0.32) * 0.05;
-        for w in select (date '2026-11-23' - (9 - x) * 7) from generate_series(0, 9) x loop
-          insert into public.channel_stats (client_id, channel, week, followers) values (nc, ch, w, base);
-          base := greatest(200, (base * (1 + g + (random() - 0.5) * 0.02))::int);
-        end loop;
-      end loop;
-      if n % 4 = 0 then
-        insert into public.posts (client_id, channels, publish_date, publish_time, body, status)
-        select nc, '{X}', current_date + x, '18:00', 'Demo post waiting for the client.', 'Client review' from generate_series(1, 1 + n % 3) x;
-      end if;
-    end loop;
-  end loop;
 
   -- 9SM's actual clients, by name only. Their numbers below are made up like everything else here.
   -- Type is set only where it is known. No manager is assigned.

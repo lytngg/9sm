@@ -44,7 +44,7 @@ export function ClientTable({ rows }: { rows: ClientRow[] }) {
               <th>Client</th>
               <th>Type</th>
               <th>Social media manager</th>
-              <th>Waiting on client</th>
+              <th>Posts the client has not approved yet</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -56,7 +56,7 @@ export function ClientTable({ rows }: { rows: ClientRow[] }) {
                 </td>
                 <td className="mute">{c.tags.join(", ")}</td>
                 <td>{c.smm ?? <span className="mute">Not set</span>}</td>
-                <td>{c.waiting ? <span className="pill pink">{c.waiting} to approve</span> : <span className="mute">Nothing</span>}</td>
+                <td>{c.waiting ? <span className="pill pink">{c.waiting} waiting, chase them</span> : <span className="mute">None</span>}</td>
                 <td>
                   {c.done === c.total ? (
                     <span className="pill good">Live</span>
