@@ -22,7 +22,8 @@ async function here(id: string, closed = false) {
   try {
     const u = new URL((await headers()).get("referer") ?? "");
     if (u.pathname === "/briefs") {
-      u.searchParams.delete("error");
+      // Drop anything that only existed to open or prefill the new request form.
+      for (const k of ["error", "new", "template", "title", "details", "due", "client"]) u.searchParams.delete(k);
       if (closed) u.searchParams.delete("open");
       else u.searchParams.set("open", id);
       const qs = u.searchParams.toString();
