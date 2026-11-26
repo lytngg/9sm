@@ -297,6 +297,31 @@ begin
   ) v(client, title, due_in, status, who)
   join public.clients cl on cl.name = v.client;
 
+  -- design and video use their own statuses
+  update public.briefs set status = case status when 'Requested' then 'New Request' when 'In progress' then 'In Design'
+    when 'In review' then 'In Review' when 'Delivered' then 'Complete' else status end
+    where team in ('design', 'video');
+  update public.briefs set priority = 'Super Urgent' where urgent;
+  update public.briefs set fields = jsonb_build_object('platform', 'X', 'content_type', 'Asset') where team = 'design' and fields = '{}';
+  update public.briefs set fields = jsonb_build_object('platform', 'Instagram', 'content_type', 'Video') where team = 'video' and fields = '{}';
+  -- talent and invoice requests
+  insert into public.briefs (client_id, team, title, details, due, status, priority, assignee, requested_by, fields)
+  select cl.id, v.team, v.title, v.details, current_date + v.due_in, v.status, v.priority,
+         (select id from public.profiles where email = v.who || '.demo@example.com'), callum, v.fields::jsonb
+  from (values
+    ('SirBetalot', 'talent', 'Kick streamer for the Christmas series', 'Slots focused, comfortable on camera with the brand world.', 9, 'Sourcing Talent', 'High', 'wissal',
+     '{"talent_type":"Streamer","operator_type":"Crypto","platform":"Kick","geos":"UK, Nordics","deal_type":"Flat Fee","budget":"Demo budget","exclusivity":"Exclusive"}'),
+    ('B2', 'talent', 'Three TikTok creators for January', 'Sweeps friendly, US only.', 20, 'New Request', 'Medium', 'daniel.umana',
+     '{"talent_type":"Influencer","operator_type":"Sweeps","platform":"TikTok","geos":"US","deal_type":"Hybrid","budget":"Demo budget","exclusivity":"Non-exclusive"}'),
+    ('96.com', 'talent', 'X KOLs for the tournament launch', 'Crypto native accounts.', 5, 'Ready for Review', 'High', 'wissal',
+     '{"talent_type":"KOL","operator_type":"Crypto","platform":"X","geos":"Global","deal_type":"Flat Fee","budget":"Demo budget","exclusivity":"Non-exclusive"}'),
+    ('SirBetalot', 'finance', 'Invoice request', E'Agreed deliverables: demo\nDeal duration: demo\nExpected go-live date: demo', 3, 'Open', 'Medium', 'daisy',
+     '{"talent_partner":"NorthSideSpins","invoice_sent":"Yes","payment_received":"No","talent_paid":"Not yet"}'),
+    ('96.com', 'finance', 'Invoice request', E'Agreed deliverables: demo\nDeal duration: demo', -4, 'Complete', 'Medium', 'daisy',
+     '{"talent_partner":"CryptoCassie","invoice_sent":"Yes","payment_received":"Yes","talent_paid":"In full"}')
+  ) v(client, team, title, details, due_in, status, priority, who, fields)
+  join public.clients cl on cl.name = v.client;
+
   insert into public.global_events (starts, ends, title, category, regions, tier) values
     (date '2026-12-25', null, 'NBA Christmas Day games', 'Basketball', '{US,Global}', 2),
     (date '2026-12-25', null, 'NFL Christmas Day games', 'American football', '{US}', 2),

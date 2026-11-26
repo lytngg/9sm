@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { BRIEF_STAGES, str, TASK_TEAMS, teamName } from "@/lib/workspace";
+import { str, TASK_TEAMS, teamName } from "@/lib/workspace";
+import { BUCKETS, flowFor, PRIORITIES, stagesFor, statusIn, type Bucket } from "@/lib/flows";
 import { uploadClientFile } from "@/lib/files";
 import { notifySlack } from "@/lib/slack";
 
@@ -71,7 +72,14 @@ export async function createBrief(formData: FormData) {
   const supabase = await createClient();
   const upload = await uploadClientFile(supabase, clientId ?? "internal", "briefs", formData.get("file"), true);
   if (upload.error) back("/briefs", upload.error);
-  const assignee = str(formData, "assignee") || null;
+  const flow = flowFor(team);
+  // Nobody picked: it lands with the person that team's requests go to.
+  let assignee: string | null = str(formData, "assignee") || null;
+  if (!assignee && flow.assignTo) {
+    const { data: staff } = await supabase.from("profiles").select("id, full_name").eq("role", "staff").not("full_name", "is", null);
+    assignee = (staff ?? []).find((p) => flow.assignTo!.some((n) => String(p.full_name).split(" ")[0] === n))?.id ?? null;
+  }
+  const priority = PRIORITIES.includes(str(formData, "priority")) ? str(formData, "priority") : "Medium";
   const { data, error } = await supabase
     .from("briefs")
     .insert({
@@ -81,11 +89,13 @@ export async function createBrief(formData: FormData) {
       details: str(formData, "details") || null,
       format: str(formData, "format") || null,
       due: str(formData, "due") || null,
-      urgent: formData.get("urgent") === "on",
+      priority,
+      urgent: priority === "Super Urgent",
       reference_url: link(str(formData, "reference")),
       attachment_path: upload.path,
       assignee,
-      status: assignee ? "In progress" : "Requested",
+      fields: customFields(formData),
+      status: statusIn(team, "new"),
     })
     .select("id")
     .single();
@@ -93,7 +103,8 @@ export async function createBrief(formData: FormData) {
   const id = data!.id as string;
   const templateId = str(formData, "template");
   if (templateId) {
-    const { data: tpl } = await supabase.from("task_templates").select("items").eq("id", templateId).maybeSingle();
+    const { data: tpl } = await supabase.from("task_templates").select("items, format").eq("id", templateId).maybeSingle();
+    if (tpl?.format) await supabase.from("briefs").update({ format: tpl.format }).eq("id", id);
     const items = ((tpl?.items ?? []) as string[]).map((text, position) => ({ brief_id: id, text, position }));
     if (items.length) await supabase.from("brief_items").insert(items);
   }
@@ -116,26 +127,39 @@ async function move(id: string, patch: Record<string, unknown>, event: string, k
   back(await here(id));
 }
 
+async function teamOf(id: string) {
+  const supabase = await createClient();
+  const { data } = await supabase.from("briefs").select("team, title, assignee, requested_by, client_id").eq("id", id).maybeSingle();
+  return data;
+}
+
 export async function takeBrief(id: string) {
   const me = await requireStaff();
-  await move(id, { assignee: me.id, status: "In progress" }, "Picked this up.");
+  const task = await teamOf(id);
+  if (!task) back("/briefs", "That task could not be found.");
+  await move(id, { assignee: me.id, status: statusIn(task!.team, "working") }, "Picked this up.");
 }
 
 // Dragging a card on the board. The board can be grouped by status, person or team,
 // so a drop changes whichever of those the columns stand for.
 export async function setTaskProp(id: string, by: string, value: string) {
   const me = await requireStaff();
-  if (by === "status" && (BRIEF_STAGES as readonly string[]).includes(value)) {
-    await move(id, { status: value }, `Moved to ${value}.`, "event", true);
+  const task = await teamOf(id);
+  if (!task) return;
+  if (by === "status") {
+    // A column is either one of the team's own statuses, or a mixed bucket like "b:working".
+    const status = value.startsWith("b:")
+      ? BUCKETS.some((k) => k.key === value.slice(2)) ? statusIn(task.team, value.slice(2) as Bucket) : null
+      : stagesFor(task.team).includes(value) ? value : null;
+    if (status) await move(id, { status }, `Moved to ${status}.`, "event", true);
   } else if (by === "team" && TASK_TEAMS.some((t) => t.key === value)) {
-    await move(id, { team: value }, `Moved to the ${teamName(value)} team.`, "event", true);
+    await move(id, { team: value, status: statusIn(value, "new") }, `Moved to the ${teamName(value)} team.`, "event", true);
   } else if (by === "person") {
     const supabase = await createClient();
     const { data: who } = value ? await supabase.from("profiles").select("id, full_name").eq("id", value).eq("role", "staff").maybeSingle() : { data: null };
     if (value && !who) return;
-    const { data: task } = await supabase.from("briefs").select("title").eq("id", id).maybeSingle();
     await move(id, { assignee: who?.id ?? null }, who ? `Given to ${who.full_name ?? "someone"}.` : "Unassigned.", "event", true);
-    await notify(supabase, me.id, who?.id, `You were given "${task?.title ?? "a task"}"`, id);
+    await notify(supabase, me.id, who?.id, `You were given "${task.title ?? "a task"}"`, id);
   }
 }
 
@@ -145,9 +169,14 @@ export async function quickAdd(by: string, value: string, team: string, formData
   const title = str(formData, "title");
   if (!title) return;
   const supabase = await createClient();
-  const row: Record<string, unknown> = { title, team: TASK_TEAMS.some((t) => t.key === team) ? team : "social", status: "Requested" };
-  if (by === "status" && (BRIEF_STAGES as readonly string[]).includes(value)) row.status = value;
+  const row: Record<string, unknown> = { title, team: TASK_TEAMS.some((t) => t.key === team) ? team : "social" };
   if (by === "team" && TASK_TEAMS.some((t) => t.key === value)) row.team = value;
+  const rowTeam = String(row.team);
+  row.status = statusIn(rowTeam, "new");
+  if (by === "status") {
+    if (value.startsWith("b:") && BUCKETS.some((k) => k.key === value.slice(2))) row.status = statusIn(rowTeam, value.slice(2) as Bucket);
+    else if (stagesFor(rowTeam).includes(value)) row.status = value;
+  }
   if (by === "person" && value) row.assignee = value;
   const { data } = await supabase.from("briefs").insert(row).select("id").single();
   if (data && row.assignee) await notify(supabase, me.id, String(row.assignee), `You were given "${title}"`, data.id);
@@ -158,10 +187,10 @@ export async function saveTask(id: string, formData: FormData) {
   const me = await requireStaff();
   const title = str(formData, "title");
   const team = str(formData, "team");
-  const status = str(formData, "status");
-  if (!title || !TASK_TEAMS.some((t) => t.key === team) || !(BRIEF_STAGES as readonly string[]).includes(status)) {
-    back(await here(id), "A task needs a title, a team and a status.");
-  }
+  if (!title || !TASK_TEAMS.some((t) => t.key === team)) back(await here(id), "A task needs a title and a team.");
+  // If the team changed, the old status may not exist there. Start it at that team's first step.
+  const status = stagesFor(team).includes(str(formData, "status")) ? str(formData, "status") : statusIn(team, "new");
+  const priority = PRIORITIES.includes(str(formData, "priority")) ? str(formData, "priority") : "Medium";
   const supabase = await createClient();
   const { data: before } = await supabase.from("briefs").select("assignee, status").eq("id", id).maybeSingle();
   const assignee = str(formData, "assignee") || null;
@@ -174,8 +203,8 @@ export async function saveTask(id: string, formData: FormData) {
       assignee,
       client_id: str(formData, "client") || null,
       due: str(formData, "due") || null,
-      format: str(formData, "format") || null,
-      urgent: formData.get("urgent") === "on",
+      priority,
+      urgent: priority === "Super Urgent",
       details: str(formData, "details") || null,
       reference_url: link(str(formData, "reference")),
       fields: customFields(formData),
@@ -191,25 +220,27 @@ export async function saveTask(id: string, formData: FormData) {
 export async function sendForReview(id: string, formData: FormData) {
   const me = await requireStaff();
   const supabase = await createClient();
-  const { data: brief } = await supabase.from("briefs").select("client_id, title, requested_by").eq("id", id).maybeSingle();
+  const { data: brief } = await supabase.from("briefs").select("client_id, title, requested_by, team").eq("id", id).maybeSingle();
   if (!brief) back("/briefs", "That task could not be found.");
   const url = link(str(formData, "delivery_url"));
   const upload = await uploadClientFile(supabase, brief!.client_id ?? "internal", "briefs", formData.get("file"), true);
   if (upload.error) back(await here(id), upload.error);
-  if (!url && !upload.path) back(await here(id), "Add a link to the work or upload the file.");
-  const patch: Record<string, unknown> = { status: "In review" };
+  const hasReview = flowFor(brief!.team).stages.some((x) => x[1] === "review");
+  if (hasReview && !url && !upload.path) back(await here(id), "Add a link to the work or upload the file.");
+  const patch: Record<string, unknown> = { status: statusIn(brief!.team, "review") };
   if (url) patch.delivery_url = url;
   if (upload.path) patch.delivery_path = upload.path;
-  await notify(supabase, me.id, brief!.requested_by, `"${brief!.title}" is ready for you to review`, id);
-  await move(id, patch, "Sent for review.");
+  await notify(supabase, me.id, brief!.requested_by, hasReview ? `"${brief!.title}" is ready for you to review` : `"${brief!.title}" is complete`, id);
+  await move(id, patch, hasReview ? "Sent for review." : "Marked complete.");
 }
 
 export async function approveBrief(id: string) {
   const me = await requireStaff();
   const supabase = await createClient();
-  const { data: brief } = await supabase.from("briefs").select("title, assignee").eq("id", id).maybeSingle();
-  await notify(supabase, me.id, brief?.assignee, `"${brief?.title}" was approved`, id);
-  await move(id, { status: "Delivered" }, "Approved. Delivered.");
+  const { data: brief } = await supabase.from("briefs").select("title, assignee, team").eq("id", id).maybeSingle();
+  if (!brief) back("/briefs", "That task could not be found.");
+  await notify(supabase, me.id, brief!.assignee, `"${brief!.title}" was approved`, id);
+  await move(id, { status: statusIn(brief!.team, "done") }, "Approved and closed.");
 }
 
 export async function askForChanges(id: string, formData: FormData) {
@@ -217,14 +248,17 @@ export async function askForChanges(id: string, formData: FormData) {
   const note = str(formData, "note");
   if (!note) back(await here(id), "Say what should change.");
   const supabase = await createClient();
-  const { data: brief } = await supabase.from("briefs").select("title, assignee").eq("id", id).maybeSingle();
-  await notify(supabase, me.id, brief?.assignee, `Changes asked on "${brief?.title}"`, id);
-  await move(id, { status: "In progress" }, note, "changes");
+  const { data: brief } = await supabase.from("briefs").select("title, assignee, team").eq("id", id).maybeSingle();
+  if (!brief) back("/briefs", "That task could not be found.");
+  await notify(supabase, me.id, brief!.assignee, `Changes asked on "${brief!.title}"`, id);
+  await move(id, { status: statusIn(brief!.team, "working") }, note, "changes");
 }
 
 export async function reopenBrief(id: string) {
   await requireStaff();
-  await move(id, { status: "In progress" }, "Reopened.");
+  const task = await teamOf(id);
+  if (!task) back("/briefs", "That task could not be found.");
+  await move(id, { status: statusIn(task!.team, "working") }, "Reopened.");
 }
 
 export async function addNote(id: string, formData: FormData) {

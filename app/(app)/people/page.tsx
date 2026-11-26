@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { TEAMS, today } from "@/lib/workspace";
 import { Avatar } from "@/components/avatar";
+import { isClosed } from "@/lib/flows";
 
 type Person = { id: string; full_name: string | null; title: string | null; team: string | null; photo_url: string | null };
 
@@ -13,7 +14,7 @@ export default async function People() {
   const [{ data: staff }, { data: clients }, { data: briefs }] = await Promise.all([
     supabase.from("profiles").select("id, full_name, title, team, photo_url").eq("role", "staff").not("full_name", "is", null).order("full_name"),
     supabase.from("clients").select("name, smm_id").not("smm_id", "is", null).order("name"),
-    supabase.from("briefs").select("assignee, due").neq("status", "Delivered").not("assignee", "is", null),
+    supabase.from("briefs").select("assignee, due, team, status").not("assignee", "is", null),
   ]);
   const people = (staff ?? []) as Person[];
   const owns = new Map<string, string[]>();
@@ -21,7 +22,7 @@ export default async function People() {
   const open = new Map<string, number>();
   const late = new Map<string, number>();
   const now = today();
-  (briefs ?? []).forEach((b) => {
+  (briefs ?? []).filter((b) => !isClosed(b.team, b.status)).forEach((b) => {
     open.set(b.assignee, (open.get(b.assignee) ?? 0) + 1);
     if (b.due && b.due < now) late.set(b.assignee, (late.get(b.assignee) ?? 0) + 1);
   });

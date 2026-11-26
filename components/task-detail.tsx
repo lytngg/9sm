@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { BRIEF_STAGES, TASK_TEAMS, today } from "@/lib/workspace";
-import { PLUGINS } from "@/lib/plugins";
+import { TASK_TEAMS, today } from "@/lib/workspace";
+import { bucketOf, flowFor, isClosed, PRIORITIES, stagesFor, toneOf } from "@/lib/flows";
+import { FlowFields } from "@/components/flow-fields";
 import { signedUrls } from "@/lib/files";
 import {
   addItem, addNote, approveBrief, askForChanges, deleteTask, removeItem, reopenBrief, saveTask, sendForReview, takeBrief, toggleItem,
@@ -26,11 +27,16 @@ export async function TaskDetail({ id, meId, error, closeHref }: { id: string; m
   const person = new Map((staff ?? []).map((s) => [s.id as string, (s.full_name as string | null) ?? (s.email as string)]));
   const named = (staff ?? []).filter((s) => s.full_name);
   const files = await signedUrls(supabase, [b.attachment_path, b.delivery_path]);
-  const stage = (BRIEF_STAGES as readonly string[]).indexOf(b.status);
-  const late = b.due && b.due < today() && b.status !== "Delivered";
+  const flow = flowFor(b.team);
+  const stages = stagesFor(b.team);
+  const stage = stages.indexOf(b.status);
+  const bucket = bucketOf(b.team, b.status);
+  const closed = isClosed(b.team, b.status);
+  const tone = toneOf(b.team, b.status);
+  const hasReview = flow.stages.some((x) => x[1] === "review");
+  const late = b.due && b.due < today() && !closed;
   const list = items ?? [];
   const doneCount = list.filter((i) => i.done).length;
-  const formats = [...new Set([...(PLUGINS.design.formats ?? []), ...(PLUGINS.video.formats ?? [])])];
   return (
     <>
       <p className="small row" style={{ margin: 0, justifyContent: "space-between" }}>
@@ -44,13 +50,15 @@ export async function TaskDetail({ id, meId, error, closeHref }: { id: string; m
           <p className="mute" style={{ margin: "8px 0 0" }}>
             Raised by {person.get(b.requested_by ?? "") ?? "someone"}
             {late ? <span style={{ color: "var(--bad)", fontWeight: 600 }}>, late</span> : null}
-            {b.urgent && b.status !== "Delivered" ? <span style={{ color: "var(--bad)", fontWeight: 600 }}>, urgent</span> : null}
+            {!closed && (b.priority === "Super Urgent" || b.priority === "High") ? (
+              <span style={{ color: b.priority === "Super Urgent" ? "var(--bad)" : "var(--warn)", fontWeight: 600 }}>, {String(b.priority).toLowerCase()}</span>
+            ) : null}
           </p>
         </div>
-        <span className={b.status === "Delivered" ? "pill good" : b.status === "In review" ? "pill pink" : "pill purple"}>{b.status}</span>
+        <span className={tone === "good" ? "pill good" : tone === "pink" ? "pill pink" : tone === "purple" ? "pill purple" : "pill"}>{b.status}</span>
       </div>
-      <div className={["rail purple", "rail purple", "rail pink", "rail good"][stage] ?? "rail"} style={{ margin: "18px 0 26px", maxWidth: 420 }} role="img" aria-label={`Stage ${stage + 1} of 4: ${b.status}`}>
-        {BRIEF_STAGES.map((s, i) => (
+      <div className={tone === "good" ? "rail good" : tone === "pink" ? "rail pink" : "rail purple"} style={{ margin: "18px 0 26px", maxWidth: 420 }} role="img" aria-label={`Step ${stage + 1} of ${stages.length}: ${b.status}`}>
+        {stages.map((s, i) => (
           <i key={s} className={i <= stage ? "on" : undefined} />
         ))}
       </div>
@@ -59,14 +67,14 @@ export async function TaskDetail({ id, meId, error, closeHref }: { id: string; m
         <div>
           {/* what happens next */}
           <div className="card" style={{ marginBottom: 28 }}>
-            {b.status === "Requested" ? (
+            {bucket === "new" ? (
               <form action={takeBrief.bind(null, id)}>
                 <button className="btn">I&apos;ll take this</button>
               </form>
             ) : null}
-            {b.status === "In progress" ? (
+            {bucket === "working" ? (
               <form className="f" action={sendForReview.bind(null, id)}>
-                <h2>Send it for review</h2>
+                <h2>{hasReview ? "Send it for review" : "Finish it"}</h2>
                 <label>
                   Link to the work
                   <input type="url" name="delivery_url" defaultValue={b.delivery_url ?? ""} placeholder="Figma, Drive or Frame link" />
@@ -76,7 +84,7 @@ export async function TaskDetail({ id, meId, error, closeHref }: { id: string; m
                   <input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" />
                 </label>
                 <div className="row">
-                  <button className="btn">Send for review</button>
+                  <button className="btn">{hasReview ? "Send for review" : "Mark complete"}</button>
                   {b.assignee !== meId ? (
                     <button className="btn ghost" formAction={takeBrief.bind(null, id)} formNoValidate>
                       Assign it to me
@@ -85,7 +93,7 @@ export async function TaskDetail({ id, meId, error, closeHref }: { id: string; m
                 </div>
               </form>
             ) : null}
-            {b.status === "In review" ? (
+            {bucket === "review" ? (
               <div className="row" style={{ alignItems: "flex-end" }}>
                 <form action={approveBrief.bind(null, id)}>
                   <button className="btn">Approve</button>
@@ -96,7 +104,7 @@ export async function TaskDetail({ id, meId, error, closeHref }: { id: string; m
                 </form>
               </div>
             ) : null}
-            {b.status === "Delivered" ? (
+            {closed ? (
               <form action={reopenBrief.bind(null, id)}>
                 <button className="btn ghost sm">Reopen</button>
               </form>
@@ -187,7 +195,7 @@ export async function TaskDetail({ id, meId, error, closeHref }: { id: string; m
               <label>
                 Status
                 <select name="status" defaultValue={b.status}>
-                  {BRIEF_STAGES.map((s) => (
+                  {stages.map((s) => (
                     <option key={s}>{s}</option>
                   ))}
                 </select>
@@ -229,14 +237,14 @@ export async function TaskDetail({ id, meId, error, closeHref }: { id: string; m
                 <input type="date" name="due" defaultValue={b.due ?? ""} />
               </label>
               <label>
-                Format
-                <select name="format" defaultValue={b.format ?? ""}>
-                  <option value="">Not set</option>
-                  {formats.map((f) => (
-                    <option key={f}>{f}</option>
+                Priority
+                <select name="priority" defaultValue={b.priority ?? "Medium"}>
+                  {PRIORITIES.map((x) => (
+                    <option key={x}>{x}</option>
                   ))}
                 </select>
               </label>
+              <FlowFields flow={flow} values={values} />
               {fields.map((f) => (
                 <label key={f.id}>
                   {f.name}
@@ -259,16 +267,12 @@ export async function TaskDetail({ id, meId, error, closeHref }: { id: string; m
               ))}
             </div>
             <label>
-              Details
-              <textarea name="details" rows={6} defaultValue={b.details ?? ""} />
+              {flow.detailsLabel ?? "Details"}
+              <textarea name="details" rows={flow.detailsDefault ? 9 : 6} defaultValue={b.details ?? ""} />
             </label>
             <label>
               Reference link
               <input type="url" name="reference" defaultValue={b.reference_url ?? ""} placeholder="https://" />
-            </label>
-            <label className="check">
-              <input type="checkbox" name="urgent" defaultChecked={b.urgent} />
-              Urgent
             </label>
             <div className="row" style={{ justifyContent: "space-between" }}>
               <button className="btn">Save</button>

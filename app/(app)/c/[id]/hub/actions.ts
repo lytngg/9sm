@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MARKETS, OPERATOR_TAGS, pick, str } from "@/lib/workspace";
 import { uploadClientFile } from "@/lib/files";
 import { EVENT_CATEGORIES } from "@/lib/scope";
+import { startOnboarding } from "@/lib/onboarding-start";
 
 const FIELDS = [
   "website",
@@ -68,6 +69,47 @@ export async function saveHubStaff(clientId: string, formData: FormData) {
     access_confirmed: formData.get("access_confirmed") === "on",
     contract_url: str(formData, "contract_url") || null,
     slack_url: str(formData, "slack_url") || null,
+    intro_booking_url: /^https:\/\//.test(str(formData, "intro_booking_url")) ? str(formData, "intro_booking_url") : null,
   });
   done(clientId, e1 || e2 ? "That did not save. Try again." : undefined);
+}
+
+// ---------- team checklist ----------
+function team(clientId: string, error?: string): never {
+  revalidatePath(`/c/${clientId}/hub`);
+  revalidatePath("/onboarding");
+  redirect(`/c/${clientId}/hub${error ? `?error=${encodeURIComponent(error)}` : ""}#team`);
+}
+
+export async function startChecklist(clientId: string) {
+  const me = await requireStaff();
+  const supabase = await createClient();
+  const { data: client } = await supabase.from("clients").select("name").eq("id", clientId).maybeSingle();
+  if (!client) team(clientId, "That client could not be found.");
+  await startOnboarding(supabase, clientId, client!.name, me.id);
+  team(clientId);
+}
+
+export async function setStepStatus(clientId: string, itemId: string, status: string) {
+  await requireStaff();
+  if (!["Not started", "In progress", "Done"].includes(status)) team(clientId, "Unknown status.");
+  const supabase = await createClient();
+  const { error } = await supabase.from("onboarding_items").update({ status, updated_at: new Date().toISOString() }).eq("id", itemId).eq("client_id", clientId);
+  team(clientId, error ? "Could not update that step." : undefined);
+}
+
+export async function saveStep(clientId: string, itemId: string, formData: FormData) {
+  const me = await requireStaff();
+  const supabase = await createClient();
+  const assignee = str(formData, "assignee") || null;
+  const { data: before } = await supabase.from("onboarding_items").select("assignee, task").eq("id", itemId).maybeSingle();
+  const { error } = await supabase
+    .from("onboarding_items")
+    .update({ assignee, due: str(formData, "due") || null, updated_at: new Date().toISOString() })
+    .eq("id", itemId)
+    .eq("client_id", clientId);
+  if (!error && assignee && assignee !== me.id && before && before.assignee !== assignee) {
+    await supabase.from("notifications").insert({ user_id: assignee, body: `Onboarding step for you: ${before.task}`, link: `/c/${clientId}/hub#team` });
+  }
+  team(clientId, error ? "Could not save that step." : undefined);
 }

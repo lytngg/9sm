@@ -6,10 +6,20 @@ import { doneCount, onboardingSteps, type ClientProfile } from "@/lib/onboarding
 export default async function OnboardingBoard() {
   await requireStaff();
   const supabase = await createClient();
-  const [{ data: clients }, { data: profiles }] = await Promise.all([
+  const [{ data: clients }, { data: profiles }, { data: checklist }] = await Promise.all([
     supabase.from("clients").select("id, name, created_at").order("created_at", { ascending: false }),
     supabase.from("client_profile").select("*"),
+    supabase.from("onboarding_items").select("client_id, status, due").limit(5000),
   ]);
+  const team = new Map<string, { done: number; total: number; late: number }>();
+  const todayIso = new Date().toISOString().slice(0, 10);
+  (checklist ?? []).forEach((i) => {
+    const t = team.get(i.client_id) ?? { done: 0, total: 0, late: 0 };
+    t.total += 1;
+    if (i.status === "Done") t.done += 1;
+    else if (i.due && i.due < todayIso) t.late += 1;
+    team.set(i.client_id, t);
+  });
   const byClient = new Map((profiles ?? []).map((p) => [p.client_id as string, p as ClientProfile]));
   // Reading the clock is fine here: the page is rendered per request, never cached.
   // eslint-disable-next-line react-hooks/purity
@@ -25,8 +35,10 @@ export default async function OnboardingBoard() {
       days: Math.max(0, Math.floor((now - new Date(c.created_at).getTime()) / 86400000)),
     };
   });
-  const open = rows.filter((r) => r.done < r.steps.length);
-  const finished = rows.filter((r) => r.done === r.steps.length);
+  // Still onboarding if the client has steps left, or the team checklist is not finished.
+  const teamOpen = (id: string) => Boolean(team.get(id) && team.get(id)!.done < team.get(id)!.total);
+  const open = rows.filter((r) => r.done < r.steps.length || teamOpen(r.id));
+  const finished = rows.filter((r) => r.done === r.steps.length && !teamOpen(r.id));
   return (
     <>
       <h1>Onboarding</h1>
@@ -40,7 +52,8 @@ export default async function OnboardingBoard() {
           <thead>
             <tr>
               <th>Client</th>
-              <th>Progress</th>
+              <th>Client steps</th>
+              <th>Team checklist</th>
               <th>Outstanding</th>
               <th>Go-live</th>
               <th>Days since added</th>
@@ -60,6 +73,16 @@ export default async function OnboardingBoard() {
                   </div>
                 </td>
                 <td>
+                  {team.get(r.id) ? (
+                    <span>
+                      {team.get(r.id)!.done} of {team.get(r.id)!.total}
+                      {team.get(r.id)!.late ? <span style={{ color: "var(--bad)", fontWeight: 600 }}>, {team.get(r.id)!.late} late</span> : null}
+                    </span>
+                  ) : (
+                    <span className="mute">Not started</span>
+                  )}
+                </td>
+                <td>
                   <span className="row" style={{ gap: 12 }}>
                     {r.steps
                       .filter((s) => s.state !== "done")
@@ -76,7 +99,7 @@ export default async function OnboardingBoard() {
             ))}
             {open.length === 0 ? (
               <tr>
-                <td colSpan={5} className="mute">
+                <td colSpan={6} className="mute">
                   Nobody is in onboarding right now.
                 </td>
               </tr>

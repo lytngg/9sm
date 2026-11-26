@@ -3,7 +3,8 @@ import { doneCount, onboardingSteps, type ClientProfile } from "@/lib/onboarding
 import { signedUrls } from "@/lib/files";
 import { TagPicker } from "@/components/tags";
 import { EVENT_CATEGORIES, EVENT_LEVELS } from "@/lib/scope";
-import { saveHub, saveHubStaff } from "./actions";
+import { ONBOARDING_PHASES } from "@/lib/onboarding-steps";
+import { saveHub, saveHubStaff, saveStep, setStepStatus, startChecklist } from "./actions";
 
 const STATE = { done: ["pill good", "Done"], client: ["pill pink", "With the client"], "9sm": ["pill purple", "With 9SM"] } as const;
 
@@ -25,6 +26,17 @@ export default async function Hub({
   const guidelines = p?.brand_guidelines_path ? files[p.brand_guidelines_path] : null;
   const v = (k: keyof ClientProfile) => (p?.[k] as string | null) ?? "";
   const save = saveHub.bind(null, id);
+  const [{ data: itemRows }, { data: staff }] = isStaff
+    ? await Promise.all([
+        supabase.from("onboarding_items").select("*").eq("client_id", id).order("position"),
+        supabase.from("profiles").select("id, full_name").eq("role", "staff").not("full_name", "is", null).order("full_name"),
+      ])
+    : [{ data: null }, { data: null }];
+  const items = (itemRows ?? []) as { id: string; task: string; phase: string; owner_label: string | null; assignee: string | null; due: string | null; status: string }[];
+  const nameOf = new Map((staff ?? []).map((x) => [x.id as string, String(x.full_name)]));
+  const itemsDone = items.filter((i) => i.status === "Done").length;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const booking = (p as (ClientProfile & { intro_booking_url?: string | null }) | null)?.intro_booking_url ?? "";
 
   return (
     <>
@@ -58,6 +70,24 @@ export default async function Hub({
             </li>
           ))}
         </ol>
+        {n < steps.length ? (
+          <p className="mute small" style={{ margin: "14px 0 0" }}>
+            {isStaff ? "The client sees this:" : null} Getting set up takes at least two weeks. A new asset pack takes one and a half to two
+            weeks and needs your sign-off before we go live.
+          </p>
+        ) : null}
+        {booking ? (
+          <div className="row" style={{ marginTop: 14 }}>
+            <a className="btn sm" href={booking} target="_blank" rel="noreferrer">
+              Pick a time for the intro call
+            </a>
+            {p?.slack_url ? (
+              <a className="btn ghost sm" href={p.slack_url} target="_blank" rel="noreferrer">
+                Join your Slack channel
+              </a>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="grid">
@@ -225,6 +255,10 @@ export default async function Hub({
                 Slack channel join link
                 <input type="url" name="slack_url" defaultValue={v("slack_url")} placeholder="https://" />
               </label>
+              <label>
+                Intro call booking link
+                <input type="url" name="intro_booking_url" defaultValue={booking} placeholder="A Google Calendar or Calendly booking page" />
+              </label>
               <label className="check">
                 <input type="checkbox" name="access_confirmed" defaultChecked={Boolean(p?.access_confirmed)} />
                 9SM has access to their accounts
@@ -233,10 +267,92 @@ export default async function Hub({
                 <button className="btn">Save</button>
               </div>
             </form>
-            <p className="mute small">The client sees the Slack and contract links, and nothing else on this form.</p>
+            <p className="mute small">The client sees the Slack, contract and booking links, and nothing else on this form.</p>
           </div>
         ) : null}
       </div>
+
+      {isStaff ? (
+        <section className="plug-sec" id="team">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <h3>
+              Team checklist{" "}
+              {items.length ? (
+                <span className="mute" style={{ fontSize: 14, fontFamily: "inherit" }}>
+                  {itemsDone} of {items.length} done
+                </span>
+              ) : null}
+            </h3>
+            <span className="mute small">Only 9SM sees this.</span>
+          </div>
+          {items.length === 0 ? (
+            <form action={startChecklist.bind(null, id)} style={{ marginTop: 12 }}>
+              <button className="btn">Start the onboarding checklist</button>
+              <p className="mute small">Creates the 30 steps, gives each to its usual owner and tells them.</p>
+            </form>
+          ) : (
+            <>
+              <div className="progress" style={{ maxWidth: 420 }}>
+                <i style={{ width: `${(itemsDone / items.length) * 100}%` }} />
+              </div>
+              {ONBOARDING_PHASES.filter((ph) => items.some((i) => i.phase === ph)).map((ph) => {
+                const rows = items.filter((i) => i.phase === ph);
+                return (
+                  <div key={ph} className="phase">
+                    <div className="phase-head">
+                      {ph}{" "}
+                      <span>
+                        {rows.filter((r) => r.status === "Done").length} of {rows.length}
+                      </span>
+                    </div>
+                    {rows.map((i) => {
+                      const late = i.due && i.due < todayIso && i.status !== "Done";
+                      const next = i.status === "Not started" ? "In progress" : i.status === "In progress" ? "Done" : "Not started";
+                      return (
+                        <details key={i.id} className="step">
+                          <summary>
+                            <form action={setStepStatus.bind(null, id, i.id, next)}>
+                              <button
+                                className={i.status === "Done" ? "checkbtn on" : i.status === "In progress" ? "checkbtn half" : "checkbtn"}
+                                title={`${i.status}. Click for ${next.toLowerCase()}.`}
+                                aria-label={`${i.task}: ${i.status}. Set to ${next}.`}
+                              >
+                                {i.status === "Done" ? "✓" : ""}
+                              </button>
+                            </form>
+                            <span className={i.status === "Done" ? "done" : undefined}>{i.task}</span>
+                            <span className="mute small">{i.assignee ? (nameOf.get(i.assignee) ?? i.owner_label) : i.owner_label}</span>
+                            <span className="small" style={{ color: late ? "var(--bad)" : "var(--mute)" }}>{i.due ? `${late ? "Late, " : ""}${i.due}` : "No date"}</span>
+                            <span className={i.status === "Done" ? "pill good" : i.status === "In progress" ? "pill purple" : "pill"}>{i.status}</span>
+                          </summary>
+                          <form className="row" action={saveStep.bind(null, id, i.id)} style={{ padding: "8px 0 14px 30px" }}>
+                            <label>
+                              Owner
+                              <select name="assignee" defaultValue={i.assignee ?? ""}>
+                                <option value="">{i.owner_label ?? "Nobody yet"}</option>
+                                {(staff ?? []).map((x) => (
+                                  <option key={x.id} value={x.id}>
+                                    {x.full_name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              Date
+                              <input type="date" name="due" defaultValue={i.due ?? ""} />
+                            </label>
+                            <button className="btn ghost sm">Save</button>
+                          </form>
+                        </details>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </section>
+      ) : null}
     </>
   );
 }

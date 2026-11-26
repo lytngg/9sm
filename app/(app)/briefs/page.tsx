@@ -1,31 +1,33 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { BRIEF_STAGES, TASK_TEAMS, teamName, today } from "@/lib/workspace";
-import { PLUGINS } from "@/lib/plugins";
+import { TASK_TEAMS, teamName, today } from "@/lib/workspace";
+import { BUCKETS, bucketOf, FLOWS, flowFor, isClosed, PRIORITIES, toneOf } from "@/lib/flows";
+import { FlowFields } from "@/components/flow-fields";
 import { TaskBoard, type BoardGroup, type BoardTask } from "@/components/task-board";
 import { TaskDetail } from "@/components/task-detail";
 import { addField, createBrief, quickAdd, removeField, setTaskProp } from "./actions";
 
 type Task = {
-  id: string; client_id: string | null; team: string; title: string; format: string | null; due: string | null; urgent: boolean;
+  id: string; client_id: string | null; team: string; title: string; format: string | null; due: string | null; urgent: boolean; priority: string;
   status: string; assignee: string | null; requested_by: string | null; updated_at: string; fields: Record<string, string> | null;
 };
 type Field = { id: string; name: string; kind: string; options: string[] };
 type Template = { id: string; name: string; team: string; format: string | null; details: string | null; items: string[] };
 const day = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleString("en", { day: "numeric", month: "short", timeZone: "UTC" });
-const PILL: Record<string, string> = { Requested: "pill", "In progress": "pill purple", "In review": "pill pink", Delivered: "pill good" };
+const PILLS: Record<string, string> = { grey: "pill", purple: "pill purple", pink: "pill pink", good: "pill good" };
+const pill = (team: string, status: string) => PILLS[toneOf(team, status)] ?? "pill";
 
 export default async function Tasks({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; open?: string; g?: string; v?: string; team?: string; who?: string; m?: string; client?: string; title?: string; details?: string; due?: string; template?: string }>;
+  searchParams: Promise<{ error?: string; open?: string; g?: string; new?: string; v?: string; team?: string; who?: string; m?: string; client?: string; title?: string; details?: string; due?: string; template?: string }>;
 }) {
   const me = await requireStaff();
   const q = await searchParams;
   const supabase = await createClient();
   const [{ data: taskRows }, { data: clients }, { data: staff }, { data: itemRows }, { data: fieldRows }, { data: templateRows }] = await Promise.all([
-    supabase.from("briefs").select("id, client_id, team, title, format, due, urgent, status, assignee, requested_by, updated_at, fields").order("urgent", { ascending: false }).order("due", { nullsFirst: false }).limit(1000),
+    supabase.from("briefs").select("id, client_id, team, title, format, due, urgent, priority, status, assignee, requested_by, updated_at, fields").order("urgent", { ascending: false }).order("due", { nullsFirst: false }).limit(1000),
     supabase.from("clients").select("id, name").order("name"),
     supabase.from("profiles").select("id, full_name").eq("role", "staff").not("full_name", "is", null).order("full_name"),
     supabase.from("brief_items").select("brief_id, done").limit(10000),
@@ -59,7 +61,7 @@ export default async function Tasks({
       (who === "mine" ? b.assignee === me.id : who === "raised" ? b.requested_by === me.id : who === "nobody" ? !b.assignee : who ? b.assignee === who : true),
   );
   // Everyone's load, worst first: late, then due this week, then open.
-  const openTeam = all.filter((b) => b.status !== "Delivered" && (!team || b.team === team));
+  const openTeam = all.filter((b) => !isClosed(b.team, b.status) && (!team || b.team === team));
   const perPerson = [...new Set(openTeam.map((b) => b.assignee ?? ""))]
     .map((pid) => {
       const mine = openTeam.filter((b) => (b.assignee ?? "") === pid);
@@ -70,8 +72,8 @@ export default async function Tasks({
         open: mine.length,
         late: mine.filter((b) => b.due && b.due < now).length,
         week: mine.filter((b) => b.due && b.due >= now && b.due <= weekEnd).length,
-        review: mine.filter((b) => b.status === "In review").length,
-        waiting: mine.filter((b) => b.status === "Requested").length,
+        review: mine.filter((b) => bucketOf(b.team, b.status) === "review").length,
+        waiting: mine.filter((b) => bucketOf(b.team, b.status) === "new").length,
       };
     })
     .sort((a, b) => b.late - a.late || b.week - a.week || b.open - a.open);
@@ -92,39 +94,43 @@ export default async function Tasks({
   };
   const usedTeams = TASK_TEAMS.filter((t) => all.some((b) => b.team === t.key) || ["design", "video"].includes(t.key));
   const load = usedTeams.map((d) => {
-    const open = all.filter((b) => b.team === d.key && b.status !== "Delivered");
+    const open = all.filter((b) => b.team === d.key && !isClosed(b.team, b.status));
     return {
       ...d,
       open: open.length,
-      waiting: open.filter((b) => b.status === "Requested").length,
+      waiting: open.filter((b) => bucketOf(b.team, b.status) === "new").length,
       week: open.filter((b) => b.due && b.due <= weekEnd).length,
       late: open.filter((b) => b.due && b.due < now).length,
     };
   });
-  const formats = [...new Set([...(PLUGINS.design.formats ?? []), ...(PLUGINS.video.formats ?? [])])];
-  const prefill = Boolean(q.client || q.title || template);
+  const formTeam = template ? template.team : q.new && (FLOWS[q.new] || q.new === "other") ? q.new : (team && FLOWS[team] ? team : "design");
+  const formFlow = flowFor(formTeam);
+  const prefill = Boolean(q.client || q.title || template || q.new);
 
-  const onBoard = shown.filter((t) => t.status !== "Delivered" || (by === "status" && t.updated_at > recentCut));
+  const onBoard = shown.filter((t) => !isClosed(t.team, t.status) || (by === "status" && t.updated_at > recentCut));
   const boardTasks: BoardTask[] = onBoard.map((t) => ({
     id: t.id,
     title: t.title,
-    group: by === "status" ? t.status : by === "team" ? t.team : (t.assignee && person.has(t.assignee) ? t.assignee : ""),
+    group: by === "status" ? (team ? t.status : `b:${bucketOf(t.team, t.status)}`) : by === "team" ? t.team : (t.assignee && person.has(t.assignee) ? t.assignee : ""),
     client: t.client_id ? (clientName.get(t.client_id) ?? null) : null,
     teamKey: t.team,
     teamName: teamName(t.team),
     status: t.status,
     dueLabel: t.due ? day(t.due) : null,
     late: Boolean(t.due && t.due < now),
-    urgent: t.urgent,
+    urgent: t.priority === "Super Urgent",
+    priority: t.priority,
+    tone: toneOf(t.team, t.status),
     owner: t.assignee ? (person.get(t.assignee) ?? null) : null,
     done: progress.get(t.id)?.[0] ?? 0,
     total: progress.get(t.id)?.[1] ?? 0,
-    closed: t.status === "Delivered",
+    closed: isClosed(t.team, t.status),
   }));
-  const TONES: Record<string, string> = { Requested: "grey", "In progress": "purple", "In review": "pink", Delivered: "good" };
   const groups: BoardGroup[] =
     by === "status"
-      ? BRIEF_STAGES.map((st) => ({ key: st, label: st, tone: TONES[st] }))
+      ? team
+        ? flowFor(team).stages.map(([st]) => ({ key: st, label: st, tone: toneOf(team, st) }))
+        : BUCKETS.map((k) => ({ key: `b:${k.key}`, label: k.label, tone: k.tone }))
       : by === "team"
         ? TASK_TEAMS.filter((t) => boardTasks.some((b) => b.group === t.key) || ["social", "design", "video"].includes(t.key)).map((t) => ({ key: t.key, label: t.name, tone: "grey" }))
         : [
@@ -201,35 +207,50 @@ export default async function Tasks({
       </div>
 
       <details className="newbrief" open={prefill}>
-        <summary className="btn ghost sm">New task with details or a template</summary>
-        <div className="card" style={{ marginTop: 14, maxWidth: 720 }}>
-          <div className="row" style={{ marginBottom: 12, gap: 8 }}>
-            <span className="mute small">Start from a template</span>
+        <summary className="btn sm">New request</summary>
+        <div className="card" style={{ marginTop: 14, maxWidth: 760 }}>
+          <div className="row" style={{ marginBottom: 6, gap: 8 }}>
+            <span className="mute small">What is it</span>
+            {Object.entries(FLOWS).map(([k, f]) => (
+              <Link key={k} className={!template && formTeam === k ? "filter on" : "filter"} href={`/briefs?new=${k}${q.client ? `&client=${q.client}` : ""}`}>
+                {f.formName}
+              </Link>
+            ))}
+            <Link className={!template && formTeam === "other" ? "filter on" : "filter"} href={`/briefs?new=other${q.client ? `&client=${q.client}` : ""}`}>
+              Something else
+            </Link>
+          </div>
+          <div className="row" style={{ marginBottom: 14, gap: 8 }}>
+            <span className="mute small">Or start from a checklist</span>
             {templates.map((t) => (
               <Link key={t.id} className={template?.id === t.id ? "filter on" : "filter"} href={`/briefs?template=${t.id}${q.client ? `&client=${q.client}` : ""}`}>
                 {t.name}
               </Link>
             ))}
           </div>
-          <form className="f" action={createBrief} key={template?.id ?? "blank"}>
+          <form className="f" action={createBrief} key={(template?.id ?? "") + formTeam}>
             {template ? <input type="hidden" name="template" value={template.id} /> : null}
             <label>
-              Task
-              <input type="text" name="title" defaultValue={q.title ?? (template ? `${template.name}: ` : "")} placeholder="Black Friday hero creative" required />
+              Request title
+              <input type="text" name="title" defaultValue={q.title ?? (template ? `${template.name}: ` : formFlow.formName === "Invoice request" ? "Invoice request" : "")} placeholder="A short title" required />
             </label>
             <div className="brief-grid">
+              {formTeam === "other" ? (
+                <label>
+                  Team
+                  <select name="team" defaultValue={team ?? "social"}>
+                    {TASK_TEAMS.map((d) => (
+                      <option key={d.key} value={d.key}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <input type="hidden" name="team" value={formTeam} />
+              )}
               <label>
-                Team
-                <select name="team" defaultValue={template?.team ?? team ?? "design"}>
-                  {TASK_TEAMS.map((d) => (
-                    <option key={d.key} value={d.key}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Client
+                Client or brand
                 <select name="client" defaultValue={q.client ?? ""}>
                   <option value="">No client, internal</option>
                   {(clients ?? []).map((c) => (
@@ -240,9 +261,22 @@ export default async function Tasks({
                 </select>
               </label>
               <label>
-                Give it to
+                Priority
+                <select name="priority" defaultValue="Medium">
+                  {PRIORITIES.map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {formTeam === "talent" ? "Required by" : "Due date"}
+                <input type="date" name="due" defaultValue={q.due ?? ""} />
+              </label>
+              <FlowFields flow={formFlow} />
+              <label>
+                Assignee
                 <select name="assignee" defaultValue="">
-                  <option value="">Whoever picks it up</option>
+                  <option value="">{formFlow.assignTo ? `The ${teamName(formTeam)} team` : "Whoever picks it up"}</option>
                   {(staff ?? []).map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.full_name}
@@ -252,43 +286,24 @@ export default async function Tasks({
               </label>
             </div>
             <label>
-              Details
-              <textarea name="details" rows={4} defaultValue={q.details ?? template?.details ?? ""} />
+              {formFlow.detailsLabel ?? "Details"}
+              <textarea name="details" rows={formFlow.detailsDefault ? 9 : 4} defaultValue={q.details ?? template?.details ?? formFlow.detailsDefault ?? ""} />
             </label>
             {template && template.items.length ? (
               <p className="mute small" style={{ margin: 0 }}>
                 Comes with a checklist: {template.items.join(", ")}.
               </p>
             ) : null}
-            <div className="brief-grid">
-              <label>
-                Format
-                <select name="format" defaultValue={template?.format ?? ""}>
-                  <option value="">Not set</option>
-                  {formats.map((f) => (
-                    <option key={f}>{f}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Needed by
-                <input type="date" name="due" defaultValue={q.due ?? ""} />
-              </label>
-            </div>
             <label>
               Reference link
               <input type="url" name="reference" placeholder="https://" />
             </label>
             <label>
-              Image or PDF
+              Upload a file
               <input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" />
             </label>
-            <label className="check">
-              <input type="checkbox" name="urgent" />
-              Urgent. Use this sparingly.
-            </label>
             <div>
-              <button className="btn">Create task</button>
+              <button className="btn">Send request</button>
             </div>
           </form>
         </div>
@@ -318,6 +333,7 @@ export default async function Tasks({
                   <th>Team</th>
                   <th>Status</th>
                   <th>With</th>
+                  <th>Priority</th>
                   <th>Needed by</th>
                   <th>Checklist</th>
                   {fields.map((f) => (
@@ -327,22 +343,23 @@ export default async function Tasks({
               </thead>
               <tbody>
                 {shown.map((b) => {
-                  const late = b.due && b.due < now && b.status !== "Delivered";
+                  const late = b.due && b.due < now && !isClosed(b.team, b.status);
                   const p = progress.get(b.id);
                   return (
                     <tr key={b.id}>
                       <td>
                         <Link href={`/briefs/${b.id}`}>{b.title}</Link>
-                        {b.urgent && b.status !== "Delivered" ? <span style={{ color: "var(--bad)" }}> urgent</span> : null}
+                        {b.priority === "Super Urgent" && !isClosed(b.team, b.status) ? <span style={{ color: "var(--bad)" }}> super urgent</span> : null}
                       </td>
                       <td className="mute">{b.client_id ? clientName.get(b.client_id) : "Internal"}</td>
                       <td>
                         <span className={`teamtag t-${b.team}`}>{teamName(b.team)}</span>
                       </td>
                       <td>
-                        <span className={PILL[b.status] ?? "pill"}>{b.status}</span>
+                        <span className={pill(b.team, b.status)}>{b.status}</span>
                       </td>
                       <td>{b.assignee ? person.get(b.assignee) : <span className="mute">Nobody yet</span>}</td>
+                      <td style={{ color: b.priority === "Super Urgent" ? "var(--bad)" : b.priority === "High" ? "var(--warn)" : "var(--mute)", whiteSpace: "nowrap" }}>{b.priority}</td>
                       <td style={{ color: late ? "var(--bad)" : undefined, whiteSpace: "nowrap" }}>{b.due ? day(b.due) : ""}</td>
                       <td className="mute">{p ? `${p[0]}/${p[1]}` : ""}</td>
                       {fields.map((f) => {
@@ -364,7 +381,7 @@ export default async function Tasks({
                 })}
                 {shown.length === 0 ? (
                   <tr>
-                    <td colSpan={7 + fields.length} className="mute">
+                    <td colSpan={8 + fields.length} className="mute">
                       No tasks match that.
                     </td>
                   </tr>
@@ -462,7 +479,7 @@ export default async function Tasks({
                   <Link key={b.id} href={`/briefs/${b.id}`} className="pload-task">
                     <span>{b.title}</span>
                     <span className="mute small">{b.client_id ? clientName.get(b.client_id) : "Internal"}</span>
-                    <span className={PILL[b.status] ?? "pill"}>{b.status}</span>
+                    <span className={pill(b.team, b.status)}>{b.status}</span>
                     <span style={{ color: late ? "var(--bad)" : "var(--mute)", whiteSpace: "nowrap" }}>{b.due ? `${late ? "Late, " : ""}${day(b.due)}` : "No date"}</span>
                   </Link>
                 );
@@ -504,7 +521,7 @@ export default async function Tasks({
                     {shown
                       .filter((b) => inMonth && b.due === date)
                       .map((b) => (
-                        <Link key={b.id} href={`/briefs/${b.id}`} className={b.status === "Delivered" ? "ev good" : b.status === "In review" ? "ev wait" : "ev"} style={{ textDecoration: "none", color: "inherit" }}>
+                        <Link key={b.id} href={`/briefs/${b.id}`} className={isClosed(b.team, b.status) ? "ev good" : bucketOf(b.team, b.status) === "review" ? "ev wait" : "ev"} style={{ textDecoration: "none", color: "inherit" }}>
                           <span className="ev-tag">
                             {teamName(b.team)}
                             {b.assignee ? `, ${first(b.assignee)}` : ""}
@@ -517,9 +534,9 @@ export default async function Tasks({
               })}
             </div>
           </div>
-          {shown.some((b) => !b.due && b.status !== "Delivered") ? (
+          {shown.some((b) => !b.due && !isClosed(b.team, b.status)) ? (
             <p className="mute small" style={{ marginTop: 12 }}>
-              {shown.filter((b) => !b.due && b.status !== "Delivered").length} open tasks have no date and are not on the calendar.
+              {shown.filter((b) => !b.due && !isClosed(b.team, b.status)).length} open tasks have no date and are not on the calendar.
             </p>
           ) : null}
         </>

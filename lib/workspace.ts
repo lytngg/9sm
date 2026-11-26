@@ -56,5 +56,6 @@ export const TASK_TEAMS: { key: string; name: string }[] = [
   { key: "crm", name: "CRM" },
   { key: "pr", name: "PR" },
   { key: "clipping", name: "Clipping" },
+  { key: "finance", name: "Invoicing" },
 ];
 export const teamName = (key: string) => TASK_TEAMS.find((t) => t.key === key)?.name ?? key;

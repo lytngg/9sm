@@ -6,7 +6,7 @@ import { useRef, useState, useTransition } from "react";
 
 export type BoardTask = {
   id: string; title: string; group: string; client: string | null; teamKey: string; teamName: string; status: string;
-  dueLabel: string | null; late: boolean; urgent: boolean; owner: string | null; done: number; total: number; closed: boolean;
+  dueLabel: string | null; late: boolean; urgent: boolean; priority: string; tone: string; owner: string | null; done: number; total: number; closed: boolean;
 };
 export type BoardGroup = { key: string; label: string; tone: string };
 
@@ -80,7 +80,17 @@ export function TaskBoard({
               >
                 <b>{t.title}</b>
                 {t.client ? <span className="nprop">{t.client}</span> : null}
-                {by !== "status" ? <span className={`ntag sm tone-${t.status === "Delivered" ? "good" : t.status === "In review" ? "pink" : t.status === "In progress" ? "purple" : "grey"}`}><i />{t.status}</span> : null}
+                {by !== "status" || g.key.startsWith("b:") ? (
+                  <span className={`ntag sm tone-${t.tone}`}>
+                    <i />
+                    {t.status}
+                  </span>
+                ) : null}
+                {t.priority === "High" || t.priority === "Super Urgent" ? (
+                  <span className="nprop" style={{ color: t.priority === "Super Urgent" ? "var(--bad)" : "var(--warn)", fontWeight: 600 }}>
+                    {t.priority}
+                  </span>
+                ) : null}
                 {by !== "team" ? <span className={`teamtag t-${t.teamKey}`}>{t.teamName}</span> : null}
                 {t.dueLabel ? (
                   <span className="nprop" style={{ color: t.late && !t.closed ? "var(--bad)" : undefined }}>
